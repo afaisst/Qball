@@ -43,7 +43,7 @@ QB.Tex = (function () {
     for (let i = 0; i < size * size; i++) {
       const n = rnd(), light = n > 0.5;
       d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = light ? 255 : 0;
-      d[i * 4 + 3] = Math.abs(n - 0.5) * 2 * 8;       // up to ~3% opacity: just a hint of felt
+      d[i * 4 + 3] = Math.abs(n - 0.5) * 2 * 12;      // up to ~5% opacity: a light felt texture
     }
     g.putImageData(img, 0, 0);
     return (cache[key] = c);
@@ -102,5 +102,99 @@ QB.Tex = (function () {
     return (cache[key] = c);
   }
 
-  return { feltTile, feltOverlay, cloth, wood };
+  // ---- per-pixel fibre noise on an existing canvas (rug, wallpaper) ---------------------------------------------
+  function grain(c, amount, seed) {
+    const g = c.getContext('2d'), img = g.getImageData(0, 0, c.width, c.height), d = img.data, rnd = rng(seed);
+    for (let i = 0; i < d.length; i += 4) { const f = 1 + (rnd() - 0.5) * amount; d[i] *= f; d[i + 1] *= f; d[i + 2] *= f; }
+    g.putImageData(img, 0, 0);
+  }
+
+  // ---- a rug: deep red field with a diamond lattice and a medallion, navy and gold borders -----------------------
+  function rug(w = 1024, h = 744) {
+    const key = 'rug' + w; if (cache[key]) return cache[key];
+    const c = canvas(w, h), g = c.getContext('2d');
+    const red = '#6b1d1f', red2 = '#7d2a29', navy = '#1d2741', gold = '#b48a3c', cream = '#d8c69a';
+    g.fillStyle = navy; g.fillRect(0, 0, w, h);
+    const band = (m, col) => { g.fillStyle = col; g.fillRect(m, m, w - 2 * m, h - 2 * m); };
+    band(w * 0.018, cream); band(w * 0.024, navy);
+    // border motif: small gold diamonds along the navy band
+    g.fillStyle = gold;
+    const bm = w * 0.024, bw = w * 0.05, step = w * 0.04;
+    const dia = (x, y, r) => { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath(); g.fill(); };
+    for (let x = bm + step / 2; x < w - bm; x += step) { dia(x, bm + bw / 2, bw * 0.28); dia(x, h - bm - bw / 2, bw * 0.28); }
+    for (let y = bm + step / 2; y < h - bm; y += step) { dia(bm + bw / 2, y, bw * 0.28); dia(w - bm - bw / 2, y, bw * 0.28); }
+    band(bm + bw, cream); band(bm + bw + w * 0.006, red);
+    // field: diamond lattice
+    const f0 = bm + bw + w * 0.006, fx = f0, fy = f0, fw = w - 2 * f0, fh = h - 2 * f0, cell = w * 0.07;
+    g.save(); g.beginPath(); g.rect(fx, fy, fw, fh); g.clip();
+    g.strokeStyle = red2; g.lineWidth = w * 0.004;
+    for (let k = -fh; k < fw + fh; k += cell) {
+      g.beginPath(); g.moveTo(fx + k, fy); g.lineTo(fx + k + fh, fy + fh); g.stroke();
+      g.beginPath(); g.moveTo(fx + k, fy + fh); g.lineTo(fx + k + fh, fy); g.stroke();
+    }
+    g.fillStyle = 'rgba(180,138,60,0.55)';
+    for (let i = 0; i * cell < fw + cell; i++) for (let j = 0; j * cell < fh + cell; j++) dia(fx + i * cell + ((j % 2) ? cell / 2 : 0), fy + j * cell / 2 * 2, w * 0.006);
+    // medallion
+    const cx = w / 2, cy = h / 2;
+    const rh = (rx, ry, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(cx, cy - ry); g.lineTo(cx + rx, cy); g.lineTo(cx, cy + ry); g.lineTo(cx - rx, cy); g.closePath(); g.fill(); };
+    rh(w * 0.2, h * 0.27, cream); rh(w * 0.19, h * 0.255, navy); rh(w * 0.15, h * 0.2, gold); rh(w * 0.14, h * 0.185, red);
+    g.fillStyle = navy; g.beginPath(); g.ellipse(cx, cy, w * 0.06, h * 0.08, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = gold; g.beginPath(); g.ellipse(cx, cy, w * 0.025, h * 0.034, 0, 0, Math.PI * 2); g.fill();
+    // corner pieces
+    g.fillStyle = navy;
+    for (const [x, y] of [[fx, fy], [fx + fw, fy], [fx, fy + fh], [fx + fw, fy + fh]]) { g.beginPath(); g.arc(x, y, w * 0.09, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = 'rgba(180,138,60,0.8)';
+    for (const [x, y] of [[fx, fy], [fx + fw, fy], [fx, fy + fh], [fx + fw, fy + fh]]) { g.beginPath(); g.arc(x, y, w * 0.05, 0, Math.PI * 2); g.fill(); }
+    g.restore();
+    grain(c, 0.16, 21);                                     // wool fibres
+    // a little wear in the middle (where people walk round the table)
+    const vg = g.createRadialGradient(cx, cy, w * 0.1, cx, cy, w * 0.6);
+    vg.addColorStop(0, 'rgba(255,240,220,0.05)'); vg.addColorStop(1, 'rgba(0,0,0,0.12)');
+    g.fillStyle = vg; g.fillRect(0, 0, w, h);
+    return (cache[key] = c);
+  }
+
+  // ---- floorboards: planks along x, 12 cm wide, staggered joints (tile = 2 m × 2 m, seamless) --------------------
+  function floorboards(size = 1024) {
+    const key = 'floor' + size; if (cache[key]) return cache[key];
+    const c = canvas(size, size), g = c.getContext('2d'), rnd = rng(9), woodC = wood(512, 128, 13);
+    const rows = 16, rh = size / rows;                      // 2 m / 16 = 12.5 cm planks
+    for (let r = 0; r < rows; r++) {
+      let x = -rnd() * size * 0.5;
+      while (x < size) {
+        const len = size * (0.35 + rnd() * 0.4);
+        const sx = rnd() * 300, sy = rnd() * 80;
+        for (const dx of [0, -size, size]) g.drawImage(woodC, sx, sy, 200, 40, x + dx, r * rh, len, rh);
+        // tone variation per plank
+        g.fillStyle = `rgba(${rnd() < 0.5 ? '255,220,170' : '30,15,5'},${(rnd() * 0.12).toFixed(3)})`;
+        for (const dx of [0, -size, size]) g.fillRect(x + dx, r * rh, len, rh);
+        g.fillStyle = 'rgba(0,0,0,0.55)';
+        for (const dx of [0, -size, size]) g.fillRect(x + dx, r * rh, 1.5, rh);   // butt joint
+        x += len;
+      }
+      g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, r * rh, size, 1.5);         // gap between rows
+    }
+    g.fillStyle = 'rgba(40,20,5,0.25)'; g.fillRect(0, 0, size, size);              // darker, aged finish
+    return (cache[key] = c);
+  }
+
+  // ---- wallpaper: dark green with faint vertical stripes and a small repeating motif (tile = 0.5 m) ---------------
+  function wallpaper(size = 512) {
+    const key = 'wall' + size; if (cache[key]) return cache[key];
+    const c = canvas(size, size), g = c.getContext('2d');
+    g.fillStyle = '#26382f'; g.fillRect(0, 0, size, size);
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = i % 2 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.05)';
+      g.fillRect(i * size / 8, 0, size / 16, size);
+    }
+    g.fillStyle = 'rgba(200,170,110,0.10)';
+    for (const [x, y] of [[size / 4, size / 4], [3 * size / 4, 3 * size / 4]]) {
+      g.beginPath(); g.ellipse(x, y, size * 0.05, size * 0.09, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(x, y, size * 0.09, size * 0.03, 0, 0, Math.PI * 2); g.fill();
+    }
+    grain(c, 0.06, 31);
+    return (cache[key] = c);
+  }
+
+  return { feltTile, feltOverlay, cloth, wood, rug, floorboards, wallpaper };
 })();

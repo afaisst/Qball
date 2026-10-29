@@ -121,9 +121,27 @@ window.QB = window.QB || {};
       }
       const rail = new THREE.Mesh(railGeo, [woodMat, darkMat]);
       rail.receiveShadow = true; S.add(rail);
-      // floor-level apron below the rail so the table has some body
-      const apron = new THREE.Mesh(new THREE.BoxGeometry(2 * X1, 2 * Y1, 0.18), darkMat);
-      apron.position.z = -0.075 - 0.09; S.add(apron);     // top just below the pocket cups, so pocketed balls stay visible
+      // apron (the table's wooden body) below the rail; its top sits just below the pocket cups
+      const apronMat = new THREE.MeshPhysicalMaterial({ map: tex(QB.Tex.wood(), 3, 0.25), color: 0xb89a88, roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.35 });
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(2 * X1, 2 * Y1, 0.18), apronMat);
+      apron.position.z = -0.075 - 0.09; apron.castShadow = true; S.add(apron);
+      // ---- the room: the cloth is 77 cm above the floor ----
+      const FLOOR = -0.77, apronBottom = -0.255;
+      // six turned legs (corners and the middle of the long sides), grain running along the leg
+      const legTex = tex(QB.Tex.wood(), 0.4, 1); legTex.center.set(0.5, 0.5); legTex.rotation = Math.PI / 2;
+      const legMat = new THREE.MeshPhysicalMaterial({ map: legTex, color: 0xb89a88, roughness: 0.45, clearcoat: 0.4, clearcoatRoughness: 0.3 });
+      const H = apronBottom - FLOOR;                                    // leg length
+      const prof = [[0, 0], [0.055, 0], [0.06, 0.02], [0.045, 0.05], [0.042, 0.12], [0.05, 0.2], [0.07, 0.27], [0.075, 0.31],
+        [0.06, 0.36], [0.045, 0.4], [0.05, 0.43], [0.065, 0.45], [0.065, H - 0.04], [0.075, H - 0.03], [0.075, H], [0, H]]
+        .map(([r, y]) => new THREE.Vector2(r, y));
+      const legGeo = new THREE.LatheGeometry(prof, 24);
+      const blockGeo = new THREE.BoxGeometry(0.15, 0.15, 0.12);
+      for (const [lx, ly] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1]]) {
+        const x = lx * (X1 - 0.13), y = ly * (Y1 - 0.13);
+        const leg = new THREE.Mesh(legGeo, legMat); leg.rotation.x = Math.PI / 2; leg.position.set(x, y, FLOOR);
+        leg.castShadow = true; leg.receiveShadow = true; S.add(leg);
+        const blk = new THREE.Mesh(blockGeo, legMat); blk.position.set(x, y, apronBottom - 0.06 + 0.06); S.add(blk);
+      }
 
       // diamonds
       const dm = new THREE.MeshBasicMaterial({ color: 0xe9dcc0 });
@@ -147,19 +165,40 @@ window.QB = window.QB || {};
       for (const q of mk.grid) { const m = new THREE.Mesh(gg, gm); m.position.set(q.x, q.y, 0.0008); this.gridGroup.add(m); }
       S.add(this.gridGroup);
 
-      // a dim floor far below
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial({ color: 0x17130f, roughness: 1 }));
-      floor.position.z = -0.75; S.add(floor);
+      // wooden floor, a rug under the table, and walls with wood panelling and wallpaper
+      const floorMat = new THREE.MeshStandardMaterial({ map: tex(QB.Tex.floorboards(), 5, 5), color: 0x9a8a7c, roughness: 0.6 });
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), floorMat);
+      floor.position.z = FLOOR; floor.receiveShadow = true; S.add(floor);
+      const rugMat = new THREE.MeshStandardMaterial({ map: tex(QB.Tex.rug()), roughness: 1 });
+      const rugMesh = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.34), rugMat);
+      rugMesh.position.z = FLOOR + 0.004; rugMesh.receiveShadow = true; S.add(rugMesh);
+      const RX = 4.4, RY = 3.4, WALL_H = 3.0;                          // room half-size (walls) and wall height
+      const paper = tex(QB.Tex.wallpaper(), 1, 1), panelTex = tex(QB.Tex.wood(), 1, 1);
+      const wall = (cx, cy, len, rot) => {
+        const grp = new THREE.Group(); grp.position.set(cx, cy, FLOOR); grp.rotation.z = rot;
+        const pt = paper.clone(); pt.needsUpdate = true; pt.repeat.set(len / 0.5, (WALL_H - 1.0) / 0.5);
+        const up = new THREE.Mesh(new THREE.PlaneGeometry(len, WALL_H - 1.0), new THREE.MeshStandardMaterial({ map: pt, roughness: 0.9 }));
+        up.rotation.x = Math.PI / 2; up.position.set(0, 0, 1.0 + (WALL_H - 1.0) / 2); grp.add(up);
+        const wt = panelTex.clone(); wt.needsUpdate = true; wt.repeat.set(len / 1.0, 1);
+        const low = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.0), new THREE.MeshStandardMaterial({ map: wt, color: 0x8a6e5c, roughness: 0.55 }));
+        low.rotation.x = Math.PI / 2; low.position.set(0, 0, 0.5); grp.add(low);
+        const trimMat = new THREE.MeshStandardMaterial({ color: 0x3a1d0e, roughness: 0.5 });
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.06), trimMat); rail.position.set(0, -0.02, 1.0); grp.add(rail);
+        const base = new THREE.Mesh(new THREE.BoxGeometry(len, 0.03, 0.12), trimMat); base.position.set(0, -0.015, 0.06); grp.add(base);
+        S.add(grp);
+      };
+      // a wall's planes face local −y; each wall is turned to face the table
+      wall(0, -RY, 2 * RX, Math.PI); wall(0, RY, 2 * RX, 0); wall(-RX, 0, 2 * RY, Math.PI / 2); wall(RX, 0, 2 * RY, -Math.PI / 2);
     }
 
     buildLights() {
       const S = this.scene;
-      S.add(new THREE.HemisphereLight(0xfff4e0, 0x202020, 0.35));
+      S.add(new THREE.HemisphereLight(0xfff4e0, 0x2a2018, 0.45));
       const key = new THREE.DirectionalLight(0xfff2dc, 1.1);
       key.position.set(0.2, 0.15, 3); key.target.position.set(0, 0, 0);
       key.castShadow = true;
       key.shadow.mapSize.set(2048, 2048);
-      const sc = key.shadow.camera; sc.left = -1.6; sc.right = 1.6; sc.top = 1.0; sc.bottom = -1.0; sc.near = 1; sc.far = 4;
+      const sc = key.shadow.camera; sc.left = -2.0; sc.right = 2.0; sc.top = 1.35; sc.bottom = -1.35; sc.near = 1; sc.far = 4.5;   // (incl. the table's shadow on the rug)
       key.shadow.bias = -0.0005; key.shadow.radius = 3;
       S.add(key); S.add(key.target);
       // three pool lamps along the table for highlights
