@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Qball — Billiards Simulator</title>
+  <meta name="description" content="A realistic pool / billiards simulator in the browser: real ball physics, games, drills and a 3D cue view.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><img src="assets/icon.svg" alt="" class="logo">Qball</div>
+    <nav class="tabs" role="tablist">
+      <button id="tabTable" class="active">Table</button>
+      <button id="tabGames">Games</button>
+      <button id="tabDrills">Drills</button>
+    </nav>
+    <div class="viewctl"><span>View</span>
+      <div class="seg" id="viewSeg">
+        <button data-view="2d" title="Top view only">2D</button>
+        <button data-view="split" class="active" title="Top view + cue view">Split</button>
+        <button data-view="3d" title="Cue view only (V cycles)">3D</button>
+      </div>
+    </div>
+    <span id="testBadge" class="badge" hidden>TEST MODE</span>
+    <div id="status" class="status"></div>
+    <label class="chk small"><input type="checkbox" id="optSound" checked> Sound</label>
+  </header>
+
+  <main>
+    <div id="stage">
+      <div id="pane2d" class="pane"><canvas id="table"></canvas><div class="maphint" id="mapHint">click the map to walk · double-click: back to your shot</div></div>
+      <div id="pane3d" class="pane">
+        <canvas id="cueView"></canvas>
+        <canvas id="powerCue" title="Drag the cue down to pull back, release to shoot"></canvas>
+        <div class="vbar">
+          <span class="vtitle">Cue view</span>
+          <span class="vhint">drag ↔ to aim (Shift: fine) · pull the cue on the right ↓ and release to shoot · wheel: zoom</span>
+          <button id="btnWalk" class="mini toggle" title="Stand up and walk around the table (move the blue dot on the map, drag the view to look around)" hidden>🚶 walk</button>
+          <button id="btnMap" class="mini toggle" title="Show the small top-view map" hidden>🗺 map</button>
+          <button id="btnSwap" class="mini" title="Swap the two views">⇄ swap</button>
+          <button id="btnHide3d" class="mini" title="Hide the cue view">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menus (Games / Drills) -->
+    <div id="menu" hidden>
+      <div class="menu-inner">
+        <div id="menuGames" class="menu-page">
+          <h1>Games <small>practice — one player for now</small></h1>
+          <div id="gameCards" class="cards"></div>
+        </div>
+        <div id="menuDrills" class="menu-page" hidden>
+          <h1>Drills <small>target drills: start at level 4, make it → level up, miss → down · pattern drills: ball in hand, run the balls · 10 tries each</small></h1>
+          <div id="drillCards" class="cards"></div>
+          <p class="credit">Drills inspired by the <a href="https://billiarduniversity.org/testing/exams/" target="_blank" rel="noopener">Billiard University</a> exams (F1–F5, F7) and <a href="https://drdavepoolinfo.com/?p=2037" target="_blank" rel="noopener">Dr. Dave's drill pages</a> (line-of-balls, 3-ball drill, playing the ghost). Ball positions are our own approximations, not the official diagrams.</p>
+        </div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <!-- current game / drill -->
+      <section id="activity">
+        <div class="act-head"><span id="actTitle">Free practice</span><button id="btnMenu" class="mini">menu</button></div>
+        <div id="actInfo" class="note"></div>
+        <div id="drillHud" hidden>
+          <div class="levels" id="levelDots"></div>
+          <div class="kv"><span id="drillShotLbl">Shot</span><b id="drillShot">1 / 10</b></div>
+          <div class="kv"><span id="drillScoreLbl">Score</span><b id="drillScore">–</b></div>
+          <div id="drillResult" class="result"></div>
+        </div>
+        <div id="trayBox" hidden><div class="tray-label" id="trayLabel">Balls</div><div id="tray" class="tray"></div></div>
+        <div class="row">
+          <button id="btnRack">Re-rack</button>
+          <button id="btnEasier" class="drill-only" hidden title="Go down one level">◀ easier</button>
+          <button id="btnHarder" class="drill-only" hidden title="Go up one level">harder ▶</button>
+          <button id="btnArrange" class="toggle place-only" hidden title="Arrange mode: drag any ball; off = shoot">✋ Arrange balls (M)</button>
+          <button id="btnRestoreSetup" class="place-only" hidden title="Put the balls back where they were before the last shot">↺ Last setup</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Cue</h2>
+        <div class="pads">
+          <div class="pad">
+            <canvas id="tipPad" title="Click/drag: where the tip hits (as seen down the cue). Beyond the dashed ring = miscue. Double-click to center."></canvas>
+            <div class="padlabel">Spin · <span id="tipVal" class="tipval">center</span></div>
+            <button id="btnTipCenter" class="mini">center (C)</button>
+          </div>
+          <div class="pad">
+            <canvas id="elevPad" title="Drag to raise the cue butt. Double-click for a level cue."></canvas>
+            <div class="padlabel">Cue · <span id="elevVal" class="tipval">level</span></div>
+            <button id="btnLevel" class="mini">level</button>
+          </div>
+        </div>
+        <div class="power"><div class="bar"><div id="powerFill"></div></div></div>
+        <div class="test-only readouts">
+          <div class="kv"><span>Cue speed</span><b id="powerVal">0.00 m/s</b></div>
+          <div class="kv"><span>→ Cue-ball speed</span><b id="ballSpeedVal">0.00 m/s</b></div>
+          <div class="kv"><span>Squirt</span><b id="squirtVal">–</b></div>
+          <div class="kv"><span>Aim angle</span><b id="aimVal">–</b></div>
+          <div class="kv"><span>Cut angle</span><b id="cutVal">–</b></div>
+          <div class="kv"><span>Aim lock (Space)</span><b id="lockVal">off</b></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Aiming aids</h2>
+        <label class="chk"><input type="checkbox" id="optAimLine" checked> Aim line &amp; object-ball path</label>
+        <label class="chk"><input type="checkbox" id="optGhost" checked> Ghost ball</label>
+        <label class="chk"><input type="checkbox" id="optCBPath" checked> Cue-ball path after contact</label>
+        <div id="previewVal" class="note test-only" style="margin:-2px 0 4px 24px"></div>
+        <label class="chk"><input type="checkbox" id="optTangent" checked> Tangent line (90° rule)</label>
+        <label class="chk"><input type="checkbox" id="optSquirtLine"> Aim line includes squirt &amp; swerve</label>
+        <label class="chk"><input type="checkbox" id="optTrails"> Ball trails of the last shot</label>
+        <label class="chk"><input type="checkbox" id="optGrid"> Practice markings (diamond grid dots)</label>
+      </section>
+
+      <div class="test-only">
+        <section>
+          <h2>Setup <small>meters, origin = table center</small></h2>
+          <table class="pos">
+            <tr><th></th><th>x</th><th>y</th></tr>
+            <tr><td><i class="dot cue"></i>Cue</td><td><input id="cbx" type="number" step="0.001"></td><td><input id="cby" type="number" step="0.001"></td></tr>
+            <tr><td><i class="dot ob" id="obDot"></i><span id="obName">Object</span></td><td><input id="obx" type="number" step="0.001"></td><td><input id="oby" type="number" step="0.001"></td></tr>
+          </table>
+          <div class="row">
+            <button id="btnMove" class="toggle">✋ Move balls (M)</button>
+            <button id="btnRestore" title="Put the balls back where they were before the last shot">Restore setup</button>
+          </div>
+          <div class="note">Cue ball can always be dragged. Hold <kbd>Shift</kbd> or use Move mode to drag other balls (the last one dragged is shown above).</div>
+        </section>
+
+        <section>
+          <h2>Shoot precisely</h2>
+          <div class="grid2">
+            <label>Aim angle (°)<input id="inAim" type="number" step="0.01"></label>
+            <label>Cue speed (m/s)<input id="inSpeed" type="number" step="0.05" min="0.05" value="2.00"></label>
+            <label>Cut angle (°)<input id="inCut" type="number" step="0.1" value="30"></label>
+            <div class="btncell"><button id="btnSetCut" title="Rotate aim so the ghost-ball cut angle on the selected ball equals this value">Set cut</button></div>
+            <label>Tip x (R, + right)<input id="inTipX" type="number" step="0.01" min="-0.95" max="0.95" value="0"></label>
+            <label>Tip y (R, + up)<input id="inTipY" type="number" step="0.01" min="-0.95" max="0.95" value="0"></label>
+            <label>Elevation (°)<input id="inElev" type="number" step="0.5" min="0" max="80" value="0"></label>
+          </div>
+          <div class="row">
+            <button id="btnShoot" class="primary">Shoot (Enter)</button>
+            <button id="btnReplay" title="Restore last setup and repeat last shot exactly">Replay (R)</button>
+            <button id="btnStop">Stop (X)</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Share / reproduce a shot</h2>
+          <div class="row" style="margin-top:0">
+            <button id="btnCopyShot" title="Copy the last shot (start positions, aim, speed, tip, elevation, all physics settings)">Copy last shot</button>
+            <button id="btnLoadShot" title="Paste a shot to set it up again">Load shot…</button>
+          </div>
+          <div id="shareBox" hidden>
+            <textarea id="shotText" rows="5" spellcheck="false" placeholder="Paste a shot here"></textarea>
+            <div class="row"><button id="btnApplyShot">Set up</button><button id="btnApplyShoot" class="primary">Set up &amp; shoot</button></div>
+          </div>
+          <div class="note">Paste a copied shot into the chat and I can replay it exactly.</div>
+        </section>
+
+        <section>
+          <h2>Display</h2>
+          <label class="chk"><input type="checkbox" id="optContacts" checked> Contact (ghost) positions with trails</label>
+          <label class="chk"><input type="checkbox" id="optPredict"> Predicted paths (full physics preview)</label>
+          <label class="slider">Time scale <b id="tsVal">1.00×</b><input id="optTimeScale" type="range" min="0.02" max="1" step="0.01" value="1"></label>
+        </section>
+
+        <section>
+          <h2>Physics <button id="btnDefaults" class="mini">defaults</button></h2>
+          <div id="params"></div>
+        </section>
+
+        <section>
+          <h2>Shot report</h2>
+          <div id="report" class="report"><span class="muted">Take a shot…</span></div>
+        </section>
+
+        <section>
+          <h2>Live</h2>
+          <div id="live" class="report"></div>
+        </section>
+      </div>
+
+      <section class="help">
+        <h2>Controls</h2>
+        <ul>
+          <li><b>Aim:</b> move the mouse · <kbd>←</kbd><kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine) · <kbd>Space</kbd> lock aim</li>
+          <li><b>Shoot:</b> press, drag back, release · <kbd>Esc</kbd> cancels</li>
+          <li><b>Spin:</b> click the cue ball diagram, or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>C</kbd> center</li>
+          <li><b>Cue elevation:</b> drag the side view, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower</li>
+          <li><b>Ball in hand:</b> drag the cue ball where you want it</li>
+          <li><b>View</b> (top bar): 2D, split or 3D only · <kbd>V</kbd> cycles</li>
+          <li><b>Walk around</b> (3D only): press <b>🚶 walk</b> to stand up where you are. On the map, drag the blue dot to move (or click where to go — you walk around the table). Drag the 3D view to look around (↔ turn, ↕ up/down), wheel to bend down. Press walk again, double-click the map or pick up the cue to go back to your shot.</li>
+          <li><b>Cue view:</b> drag ↔ to aim, pull the side cue ↓ and release to shoot · wheel: zoom (in = down on the shot, out = standing up)</li>
+        </ul>
+      </section>
+    </aside>
+  </main>
+  <a id="lnkTest" class="testlink" href="#" title="Physics test mode (T)">test mode</a>
+
+  <script src="js/vendor/three.min.js"></script>
+  <script src="js/constants.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/setups.js"></script>
+  <script src="js/view3d.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# --- OS / editor clutter ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+
+# --- Claude / AI assistant files and outputs ---
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.claude*
+outputs/
+scratch/
+*.local.md
+
+# --- local test output, screenshots and saved shots ---
+shots/
+*.log
+shot*.json
+test/out/
+
+# --- Node (only used for the command-line tests) ---
+node_modules/
+npm-debug.log*
