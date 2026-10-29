@@ -15,6 +15,7 @@
     <div class="brand"><img src="assets/icon.svg" alt="" class="logo">Qball</div>
     <nav class="tabs" role="tablist">
       <button id="tabTable" class="active">Table</button>
+      <button id="tabLessons">Lessons</button>
       <button id="tabGames">Games</button>
       <button id="tabDrills">Drills</button>
     </nav>
@@ -27,12 +28,13 @@
     </div>
     <span id="testBadge" class="badge" hidden>TEST MODE</span>
     <div id="status" class="status"></div>
+    <button id="btnTouch" class="toggle" title="Touch mode: aim by dragging and shoot with the pull-down cue on the side (like on a tablet)">👆 Touch mode</button>
     <label class="chk small"><input type="checkbox" id="optSound" checked> Sound</label>
   </header>
 
   <main>
     <div id="stage">
-      <div id="pane2d" class="pane"><canvas id="table"></canvas><div class="maphint" id="mapHint">click the map to walk · double-click: back to your shot</div></div>
+      <div id="pane2d" class="pane"><canvas id="table"></canvas><canvas id="powerCue2" title="Drag the cue down to pull back, release to shoot"></canvas><div id="mapGrip" title="Drag to move the map">✥</div><div class="maphint" id="mapHint">click the map to walk · double-click: back to your shot</div></div>
       <div id="pane3d" class="pane">
         <canvas id="cueView"></canvas>
         <canvas id="powerCue" title="Drag the cue down to pull back, release to shoot"></canvas>
@@ -45,11 +47,17 @@
           <button id="btnHide3d" class="mini" title="Hide the cue view">✕</button>
         </div>
       </div>
+      <!-- "eclipse" inset: the view exactly along the cue line -->
+      <div id="eclipse" hidden><canvas id="eclipseGL"></canvas><canvas id="eclipseOV"></canvas><div id="eclipseLabel"></div></div>
     </div>
 
     <!-- Menus (Games / Drills) -->
     <div id="menu" hidden>
       <div class="menu-inner">
+        <div id="menuLessons" class="menu-page" hidden>
+          <h1>Lessons <small>step-by-step introductions — the shot is set up for you, you try it and see why it works</small></h1>
+          <div id="lessonCards" class="cards"></div>
+        </div>
         <div id="menuGames" class="menu-page">
           <h1>Games <small>practice — one player for now</small></h1>
           <div id="gameCards" class="cards"></div>
@@ -72,6 +80,12 @@
           <div class="kv"><span id="drillShotLbl">Shot</span><b id="drillShot">1 / 10</b></div>
           <div class="kv"><span id="drillScoreLbl">Score</span><b id="drillScore">–</b></div>
           <div id="drillResult" class="result"></div>
+        </div>
+        <div id="lessonHud" hidden>
+          <div id="lessonSteps" class="lsteps"></div>
+          <div class="lmeter"><span>Strength</span><div id="lessonBands" class="lbands"></div></div>
+          <div id="lessonResults" class="lresults"></div>
+          <div class="row"><button id="btnLessonHelp">Show the instructions</button></div>
         </div>
         <div id="trayBox" hidden><div class="tray-label" id="trayLabel">Balls</div><div id="tray" class="tray"></div></div>
         <div class="row">
@@ -112,7 +126,10 @@
         <h2>Aiming aids</h2>
         <label class="chk"><input type="checkbox" id="optAimLine" checked> Aim line &amp; object-ball path</label>
         <label class="chk"><input type="checkbox" id="optGhost" checked> Ghost ball</label>
-        <label class="chk"><input type="checkbox" id="optCBPath" checked> Cue-ball path after contact</label>
+        <label class="chk"><input type="checkbox" id="optTipMark" checked> Tip contact point on the cue ball (3D)</label>
+        <label class="chk"><input type="checkbox" id="optEclipse"> Eclipse view (along the cue line)</label>
+        <label class="chk"><input type="checkbox" id="optOverview" checked> 3D: overview of the table while the balls roll</label>
+        <label class="chk"><input type="checkbox" id="optCBPath" checked> Cue-ball path</label>
         <div id="previewVal" class="note test-only" style="margin:-2px 0 4px 24px"></div>
         <label class="chk"><input type="checkbox" id="optTangent" checked> Tangent line (90° rule)</label>
         <label class="chk"><input type="checkbox" id="optSquirtLine"> Aim line includes squirt &amp; swerve</label>
@@ -192,19 +209,21 @@
       <section class="help">
         <h2>Controls</h2>
         <ul>
-          <li><b>Aim:</b> move the mouse · <kbd>←</kbd><kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine) · <kbd>Space</kbd> lock aim</li>
-          <li><b>Shoot:</b> press, drag back, release · <kbd>Esc</kbd> cancels</li>
+          <li><b>Aim:</b> move the mouse · <b>click</b> to freeze the aim (click again to release) · <kbd>←</kbd><kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine) · <kbd>Space</kbd> lock aim</li>
+          <li><b>Shoot:</b> press anywhere, drag back, release · <kbd>Esc</kbd> cancels</li>
+          <li><b>Touch (iPad / tablet, or the 👆 Touch mode button):</b> drag a finger on the table to aim; start the drag on the cue ball for fine aiming. Shoot with the cue on the right: pull it down and let go. In 3D, drag to aim and pinch to zoom; double-tap the map to return to your shot.</li>
           <li><b>Spin:</b> click the cue ball diagram, or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>C</kbd> center</li>
           <li><b>Cue elevation:</b> drag the side view, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower</li>
           <li><b>Ball in hand:</b> drag the cue ball where you want it</li>
           <li><b>View</b> (top bar): 2D, split or 3D only · <kbd>V</kbd> cycles</li>
-          <li><b>Walk around</b> (3D only): press <b>🚶 walk</b> to stand up where you are. On the map, drag the blue dot to move (or click where to go — you walk around the table). Drag the 3D view to look around (↔ turn, ↕ up/down), wheel to bend down. Press walk again, double-click the map or pick up the cue to go back to your shot.</li>
+          <li><b>Walk around</b> (3D only): press <b>🚶 walk</b>, or keep zooming out once you're standing. On the map, drag the blue dot to move (or click where to go — you walk around the table) and drag the blue view cone, or the crosshair itself (it snaps onto balls), to pick a spot on the table to look at — you keep facing it as you walk. Or double-click (double-tap) a ball or spot in the 3D view. The wheel (or a pinch) on the 3D view bends you down. The cue walks with you (shown see-through): press walk again, double-click the map or pick up the cue to go back to your shot, aiming the way you face. Drag the map by its ✥ grip.</li>
           <li><b>Cue view:</b> drag ↔ to aim, pull the side cue ↓ and release to shoot · wheel: zoom (in = down on the shot, out = standing up)</li>
         </ul>
       </section>
     </aside>
   </main>
   <a id="lnkTest" class="testlink" href="#" title="Physics test mode (T)">test mode</a>
+  <div id="lessonModal" hidden><div class="lbox"><h2 id="lmTitle"></h2><div id="lmBody"></div><div id="lmBtns" class="lbtns"></div></div></div>
 
   <script src="js/vendor/three.min.js"></script>
   <script src="js/constants.js"></script>
@@ -213,6 +232,8 @@
   <script src="js/render.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/setups.js"></script>
+  <script src="js/lessons.js"></script>
+  <script src="js/textures.js"></script>
   <script src="js/view3d.js"></script>
   <script src="js/main.js"></script>
 </body>

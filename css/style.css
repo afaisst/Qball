@@ -59,6 +59,7 @@ button { background: var(--panel2); color: var(--text); border: 1px solid var(--
 button:hover { border-color: #47535c; }
 button.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
 button.toggle.on { background: var(--accent2); color: #08131c; border-color: var(--accent2); }
+#btnTouch { padding: 3px 10px; font-size: 12px; white-space: nowrap; }
 button.mini { padding: 1px 6px; font-size: 10px; text-transform: none; letter-spacing: 0; margin-left: auto; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 
@@ -156,14 +157,72 @@ body.placing, body.placing * { cursor: grabbing !important; }
 .viewctl .seg button { padding: 4px 10px; }
 #stage.only3d #pane3d { flex: 1 1 auto; border-top: 0; order: 1; }
 #stage.only3d #pane2d { display: none; }
-#stage.only3d.showmap #pane2d { display: block; position: absolute; left: 12px; top: 38px; width: min(34%, 420px); aspect-ratio: 2.96 / 1.69; height: auto;
+#stage.only3d.showmap #pane2d { display: block; position: absolute; left: 12px; bottom: 12px; width: min(34%, 420px); aspect-ratio: 2.96 / 1.69; height: auto;
   z-index: 6; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); box-shadow: 0 6px 24px rgba(0,0,0,.5); }
 #powerCue { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 58px; height: min(62%, 420px); z-index: 4;
   cursor: ns-resize; touch-action: none; background: rgba(0,0,0,0.25); border-radius: 12px; }
 #stage.no3d #powerCue { display: none; }
+/* touch screens: the same pull-down cue on the 2D view (shown only in 2D-only view; split view uses the 3D one) */
+#powerCue2 { display: none; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 58px; height: min(62%, 420px); z-index: 4;
+  touch-action: none; background: rgba(0,0,0,0.35); border-radius: 12px; }
+body.touch #stage.no3d #powerCue2 { display: block; }
+body.touch #stage.no3d #table { width: calc(100% - 80px); }   /* keep the table clear of the side cue */
+body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+button, label.chk { touch-action: manipulation; }
+.tray i { touch-action: none; }
+/* phones: the top bar wraps onto two lines */
+@media (max-width: 640px) {
+  header { flex-wrap: wrap; gap: 8px 10px; padding: 6px 10px; }
+  header .status { order: 10; flex-basis: 100%; font-size: 12px; }
+  .viewctl > span { display: none; }
+}
+/* eclipse inset: view along the cue line (top right of the playing area, left of the side cue) */
+#eclipse { position: absolute; z-index: 9; top: 40px; right: 84px; width: 190px; height: 140px; border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--line); background: #0b0e11; box-shadow: 0 6px 24px rgba(0,0,0,.5); pointer-events: none; }
+#eclipse canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#eclipseLabel { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px; font-size: 11px; text-align: center;
+  color: #e6ebef; background: linear-gradient(transparent, rgba(0,0,0,0.75)); }
+#eclipse.empty #eclipseLabel { top: 0; bottom: 0; display: grid; place-items: center; color: var(--muted); background: none; }
+/* ---------- lessons ---------- */
+#lessonModal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(0,0,0,0.45); padding: 16px; }
+#lessonModal[hidden] { display: none; }
+#lessonModal .lbox { max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 18px 20px 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); font-size: 14px; line-height: 1.5; }
+#lessonModal h2 { margin: 0 0 8px; font-size: 18px; }
+#lessonModal ul { padding-left: 20px; margin: 6px 0; }
+#lessonModal p { margin: 8px 0; }
+#lessonModal .key { background: rgba(242,194,0,0.12); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; }
+#lessonModal table { border-collapse: collapse; margin: 6px 0; width: 100%; }
+#lessonModal td { padding: 3px 8px; border-bottom: 1px solid var(--line); }
+#lessonModal .lbtns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+.lsteps { display: flex; gap: 6px; margin: 6px 0 8px; }
+.lsteps span { flex: 1; text-align: center; font-size: 11px; padding: 3px 4px; border-radius: 6px; background: var(--panel2); color: var(--muted); }
+.lsteps span.on { background: var(--accent); color: #111; font-weight: 600; }
+.lsteps span.done { background: rgba(63,191,111,0.25); color: #bfe9cc; }
+.lmeter { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.lbands { flex: 1; display: flex; gap: 3px; }
+.lbands span { flex: 1; text-align: center; font-size: 11px; padding: 3px 0; border-radius: 5px; background: var(--panel2); color: var(--muted); transition: background .1s; }
+.lbands span.on { background: var(--accent2); color: #08131c; font-weight: 600; }
+.lresults { font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 4px 0 6px; }
+.lresults .b { color: var(--muted); }
+.lresults .todo { color: var(--muted); font-style: italic; }
+.lresults .ok { color: #7fd99a; }
+/* tablet in portrait: table on top, panel below */
+@media (max-width: 900px) and (orientation: portrait) {
+  main { flex-direction: column; }
+  #stage { flex: 0 0 62%; }
+  #panel { width: auto; border-left: 0; border-top: 1px solid var(--line); }
+}
 #cueView.dragging { cursor: grabbing; }
 .vbar button.toggle.on { background: var(--accent2); color: #08131c; }
 .maphint { display: none; position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 8px; font-size: 10.5px; color: #cfd6db;
   background: linear-gradient(transparent, rgba(0,0,0,0.75)); pointer-events: none; text-align: center; }
 #stage.only3d.showmap .maphint { display: block; }
+/* the map can be dragged anywhere by its grip (position kept in --map-x / --map-y) */
+#stage.only3d.showmap.mapmoved #pane2d { left: var(--map-x); top: var(--map-y); bottom: auto; }
+#mapGrip { display: none; }
+#stage.only3d.showmap #mapGrip { display: grid; place-items: center; position: absolute; left: 6px; top: 6px; z-index: 8;
+  width: 24px; height: 24px; border-radius: 6px; background: rgba(0,0,0,0.6); color: #cfd6db; font-size: 15px; line-height: 1;
+  cursor: move; touch-action: none; user-select: none; border: 1px solid rgba(255,255,255,0.15); }
+#stage.only3d.showmap #mapGrip:hover { background: rgba(79,179,255,0.35); color: #fff; }
 #stage.only3d.showmap.walking #pane2d { width: min(42%, 520px); background: #1b2228; }

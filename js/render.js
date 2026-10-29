@@ -21,9 +21,14 @@ window.QB = window.QB || {};
       this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
       const outerL = C.TABLE_L + 2 * (C.CUSHION_W + C.RAIL_W + this.margin) + 0.10;
       const outerW = C.TABLE_W + 2 * (C.CUSHION_W + C.RAIL_W + this.margin) + 0.10;
-      const s = Math.min(this.canvas.width / outerL, this.canvas.height / outerW);
-      this.view = { scale: s, ox: this.canvas.width / 2, oy: this.canvas.height / 2, dpr };
-      this.tableLayer.width = this.canvas.width; this.tableLayer.height = this.canvas.height;
+      // Upright table (head rail at the bottom) when that makes it bigger, e.g. on a phone or a tall window.
+      // Everything is drawn in a "virtual" landscape frame; clear() rotates the canvas by -90° when needed.
+      const cw = this.canvas.width, ch = this.canvas.height;
+      const sLand = Math.min(cw / outerL, ch / outerW), sUp = Math.min(ch / outerL, cw / outerW);
+      const rot = this.autoRotate !== false && sUp > sLand * 1.04;
+      const VW = rot ? ch : cw, VH = rot ? cw : ch;
+      this.view = { scale: rot ? sUp : sLand, ox: VW / 2, oy: VH / 2, dpr, rot };
+      this.tableLayer.width = VW; this.tableLayer.height = VH;
       this.drawTable(this.tableLayer.getContext('2d'));
     }
 
@@ -32,10 +37,13 @@ window.QB = window.QB || {};
     sy(y) { return this.view.oy - y * this.view.scale; }
     toWorld(clientX, clientY) {
       const rect = this.canvas.getBoundingClientRect(), v = this.view;
-      const px = (clientX - rect.left) * v.dpr, py = (clientY - rect.top) * v.dpr;
+      let px = (clientX - rect.left) * v.dpr, py = (clientY - rect.top) * v.dpr;
+      if (v.rot) { const u = this.canvas.height - py; py = px; px = u; }    // screen -> virtual (undo the -90° turn)
       return { x: (px - v.ox) / v.scale, y: -(py - v.oy) / v.scale };
     }
     px(m) { return m * this.view.scale; }
+    // move the origin to (x, y) and undo the table rotation, so text and gauges drawn there stay upright
+    upright(x, y) { this.ctx.translate(x, y); if (this.view.rot) this.ctx.rotate(Math.PI / 2); }
 
     // ---------------- Table (pre-rendered) ----------------
     drawTable(ctx) {
@@ -52,6 +60,26 @@ window.QB = window.QB || {};
       ctx.fillStyle = wood;
       roundRect(ctx, this.sx(X0), this.sy(Y0), w, h, this.px(0.05)); ctx.fill();
       ctx.restore();
+      // wood grain along each rail (mitred at the corners); 1024 texture px = 1 m
+      if (QB.Tex) {
+        const pat = ctx.createPattern(QB.Tex.wood(), 'repeat'), s = this.px(1) / 1024;
+        const Xo = T.L2 + c + rw, Yo = T.W2 + c + rw, Xi = T.L2 + c, Yi = T.W2 + c;
+        ctx.save();
+        roundRect(ctx, this.sx(X0), this.sy(Y0), w, h, this.px(0.05)); ctx.clip();
+        const poly = (pts, rot) => {
+          pat.setTransform(rot ? new DOMMatrix([0, s, -s, 0, this.sx(0), this.sy(0)]) : new DOMMatrix([s, 0, 0, s, this.sx(0), this.sy(0)]));
+          ctx.fillStyle = pat; ctx.beginPath();
+          pts.forEach(([x, y], i) => i ? ctx.lineTo(this.sx(x), this.sy(y)) : ctx.moveTo(this.sx(x), this.sy(y)));
+          ctx.closePath(); ctx.fill();
+        };
+        for (const sy of [1, -1]) poly([[-Xo, sy * Yo], [Xo, sy * Yo], [Xi, sy * Yi], [-Xi, sy * Yi]], false);   // long rails
+        for (const sx of [1, -1]) poly([[sx * Xo, -Yo], [sx * Xo, Yo], [sx * Xi, Yi], [sx * Xi, -Yi]], true);    // head and foot rails
+        // a soft varnish sheen across the rails
+        const sh = ctx.createLinearGradient(0, this.sy(Y0), 0, this.sy(-Y0));
+        sh.addColorStop(0, 'rgba(255,230,200,0.10)'); sh.addColorStop(0.5, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.12)');
+        ctx.fillStyle = sh; ctx.fillRect(this.sx(X0), this.sy(Y0), w, h);
+        ctx.restore();
+      }
       // inner rail edge highlight
       ctx.strokeStyle = 'rgba(255,220,170,0.15)'; ctx.lineWidth = Math.max(1, this.px(0.004));
       roundRect(ctx, this.sx(X0) + this.px(0.012), this.sy(Y0) + this.px(0.012), w - this.px(0.024), h - this.px(0.024), this.px(0.04)); ctx.stroke();
@@ -61,6 +89,20 @@ window.QB = window.QB || {};
       cl.addColorStop(0, '#1a7a4c'); cl.addColorStop(1, '#105a37');
       ctx.fillStyle = cl;
       ctx.fillRect(this.sx(-T.L2 - c), this.sy(T.W2 + c), this.px(C.TABLE_L + 2 * c), this.px(C.TABLE_W + 2 * c));
+      if (QB.Tex) {
+        // light wear (the break lane, the rack area) and fine felt fibres
+        ctx.save();
+        ctx.beginPath(); ctx.rect(this.sx(-T.L2 - c), this.sy(T.W2 + c), this.px(C.TABLE_L + 2 * c), this.px(C.TABLE_W + 2 * c)); ctx.clip();
+        const lane = ctx.createLinearGradient(0, this.sy(0.12), 0, this.sy(-0.12));
+        lane.addColorStop(0, 'rgba(255,255,255,0)'); lane.addColorStop(0.5, 'rgba(255,255,255,0.02)'); lane.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = lane; ctx.fillRect(this.sx(T.headSpot.x - 0.1), this.sy(0.12), this.px(T.footSpot.x - T.headSpot.x + 0.22), this.px(0.24));
+        const rack = ctx.createRadialGradient(this.sx(T.footSpot.x + 0.08), this.sy(0), 0, this.sx(T.footSpot.x + 0.08), this.sy(0), this.px(0.2));
+        rack.addColorStop(0, 'rgba(255,255,255,0.02)'); rack.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = rack; ctx.fillRect(this.sx(T.footSpot.x - 0.15), this.sy(0.2), this.px(0.45), this.px(0.4));
+        ctx.fillStyle = ctx.createPattern(QB.Tex.feltOverlay(), 'repeat');
+        ctx.fillRect(this.sx(-T.L2 - c), this.sy(T.W2 + c), this.px(C.TABLE_L + 2 * c), this.px(C.TABLE_W + 2 * c));
+        ctx.restore();
+      }
 
       // pockets (drop holes)
       for (const p of T.pockets) {
@@ -76,6 +118,7 @@ window.QB = window.QB || {};
         cu.pts.forEach((pt, i) => i ? ctx.lineTo(this.sx(pt.x), this.sy(pt.y)) : ctx.moveTo(this.sx(pt.x), this.sy(pt.y)));
         ctx.closePath();
         ctx.fillStyle = '#0d5131'; ctx.fill();
+        if (QB.Tex) { ctx.fillStyle = ctx.createPattern(QB.Tex.feltOverlay(), 'repeat'); ctx.fill(); }
         // nose highlight
         ctx.beginPath();
         ctx.moveTo(this.sx(cu.pts[1].x), this.sy(cu.pts[1].y)); ctx.lineTo(this.sx(cu.pts[2].x), this.sy(cu.pts[2].y));
@@ -120,6 +163,7 @@ window.QB = window.QB || {};
       const ctx = this.ctx;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      if (this.view.rot) ctx.setTransform(0, -1, 1, 0, 0, this.canvas.height);   // virtual x -> screen up
       ctx.drawImage(this.tableLayer, 0, 0);
     }
 
@@ -150,12 +194,20 @@ window.QB = window.QB || {};
       ctx.restore();
     }
 
-    drawBall(b, highlight) {
-      if (!b.onTable) return;
-      const ctx = this.ctx, x = this.sx(b.x), y = this.sy(b.y), r = this.px(R);
+    // opts (balls dropping into a pocket): {x, y, scale, shade}
+    drawBall(b, highlight, opts) {
+      if (!b.onTable && !opts) return;
+      const ctx = this.ctx, x = this.sx(opts ? opts.x : b.x), y = this.sy(opts ? opts.y : b.y), r = this.px(R) * (opts ? opts.scale : 1);
+      if (opts && opts.clip) {                   // a ball in a pocket: only the part seen through the hole
+        ctx.save(); ctx.beginPath(); ctx.arc(this.sx(opts.clip.x), this.sy(opts.clip.y), this.px(opts.clip.r), 0, Math.PI * 2); ctx.clip();
+        this.drawBall(b, highlight, Object.assign({}, opts, { clip: null }));
+        ctx.restore(); return;
+      }
       // shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.beginPath(); ctx.ellipse(x + r * 0.18, y + r * 0.22, r * 1.02, r * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+      if (!opts) {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.ellipse(x + r * 0.18, y + r * 0.22, r * 1.02, r * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+      }
 
       ctx.save();
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
@@ -187,7 +239,7 @@ window.QB = window.QB || {};
           if (v[2] > 0.45) {
             ctx.fillStyle = '#111'; ctx.font = `bold ${Math.round(r * 0.8 * v[2])}px system-ui, sans-serif`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(String(b.num), x + v[0] * r * 0.85, y - v[1] * r * 0.85 + r * 0.04);
+            ctx.save(); this.upright(x + v[0] * r * 0.85, y - v[1] * r * 0.85); ctx.fillText(String(b.num), 0, r * 0.04); ctx.restore();
           }
         }
       }
@@ -196,6 +248,7 @@ window.QB = window.QB || {};
       g.addColorStop(0, 'rgba(255,255,255,0.55)'); g.addColorStop(0.25, 'rgba(255,255,255,0.08)');
       g.addColorStop(0.7, 'rgba(0,0,0,0.0)'); g.addColorStop(1, 'rgba(0,0,0,0.45)');
       ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+      if (opts && opts.shade > 0) { ctx.fillStyle = `rgba(0,0,0,${opts.shade.toFixed(3)})`; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); }
       ctx.restore();
       if (highlight) {
         ctx.strokeStyle = highlight; ctx.lineWidth = Math.max(1.5, this.px(0.003));
@@ -252,15 +305,16 @@ window.QB = window.QB || {};
         if (opts.cutLabel !== false) {
         const side = aim.tangent || { x: -aim.n.y, y: aim.n.x };
         const lwx = aim.gx + side.x * 0.055 - aim.n.x * 0.03, lwy = aim.gy + side.y * 0.055 - aim.n.y * 0.03;
-        ctx.font = `600 ${Math.max(11, Math.round(this.px(0.022)))}px system-ui, sans-serif`;
-        const lx = this.sx(lwx) - ctx.measureText('00.0°').width / 2, ly = this.sy(lwy);
+        ctx.font = `600 ${Math.max(11 * this.view.dpr, Math.round(this.px(0.022)))}px system-ui, sans-serif`;
+        ctx.save(); this.upright(this.sx(lwx), this.sy(lwy));
+        const lx = -ctx.measureText('00.0°').width / 2, ly = 0;
         const txt = `${Math.abs(aim.cutDeg).toFixed(1)}°`;
-        ctx.font = `600 ${Math.max(11, Math.round(this.px(0.022)))}px system-ui, sans-serif`;
         const tw = ctx.measureText(txt).width;
         ctx.fillStyle = 'rgba(0,0,0,0.55)'; roundRect(ctx, lx - 4, ly - this.px(0.016), tw + 8, this.px(0.026), 4); ctx.fill();
         ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(txt, lx, ly - this.px(0.003));
+        ctx.restore();
         }
-      } else if (aim.hit && aim.hit.type === 'cushion' && aim.bounce) {
+      } else if (aim.hit && aim.hit.type === 'cushion' && aim.bounce && opts.bounce !== false) {   // cue ball off the cushion
         ctx.setLineDash([this.px(0.008), this.px(0.008)]);
         ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = lw;
         ctx.beginPath(); ctx.moveTo(this.sx(aim.gx), this.sy(aim.gy));
@@ -378,6 +432,14 @@ window.QB = window.QB || {};
       ctx.fillStyle = '#4fb3ff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.shadowBlur = 0;
+      // the fixed point you keep looking at while walking
+      if (w.focus) {
+        const fx = this.sx(w.focus[0]), fy = this.sy(w.focus[1]), fr = Math.max(7, this.px(0.04));
+        ctx.strokeStyle = '#4fb3ff'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(fx - fr * 1.6, fy); ctx.lineTo(fx - fr * 0.5, fy); ctx.moveTo(fx + fr * 0.5, fy); ctx.lineTo(fx + fr * 1.6, fy);
+        ctx.moveTo(fx, fy - fr * 1.6); ctx.lineTo(fx, fy - fr * 0.5); ctx.moveTo(fx, fy + fr * 0.5); ctx.lineTo(fx, fy + fr * 1.6); ctx.stroke();
+      }
       // nose: which way you face
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r * 1.0, y + Math.sin(a) * r * 1.0);
@@ -389,10 +451,12 @@ window.QB = window.QB || {};
     drawLabel(cb, text) {
       const ctx = this.ctx;
       ctx.save();
-      ctx.font = `600 ${Math.max(10, Math.round(this.px(0.018)))}px system-ui, sans-serif`;
-      const x = this.sx(cb.x) - ctx.measureText(text).width / 2, y = this.sy(cb.y) - this.px(0.06);
+      ctx.font = `600 ${Math.max(11 * this.view.dpr, Math.round(this.px(0.018)))}px system-ui, sans-serif`;
+      this.upright(this.sx(cb.x), this.sy(cb.y));
+      const x = -ctx.measureText(text).width / 2, y = -this.px(0.06);
       const tw = ctx.measureText(text).width;
-      ctx.fillStyle = 'rgba(0,0,0,0.55)'; roundRect(ctx, x - 5, y - this.px(0.014), tw + 10, this.px(0.024), 4); ctx.fill();
+      const fh = Math.max(this.px(0.024), 16 * this.view.dpr);
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'; roundRect(ctx, x - 5, y - fh * 0.58, tw + 10, fh, 4); ctx.fill();
       ctx.fillStyle = '#f2c200'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y - this.px(0.002));
       ctx.restore();
     }
@@ -400,12 +464,14 @@ window.QB = window.QB || {};
     drawPowerGauge(cb, angle, frac) {
       if (frac <= 0) return;
       const ctx = this.ctx;
-      const x = this.sx(cb.x) + this.px(0.05), y = this.sy(cb.y) - this.px(0.07);
+      ctx.save(); this.upright(this.sx(cb.x), this.sy(cb.y));
+      const x = this.px(0.05), y = -this.px(0.07);
       const w = this.px(0.12), h = this.px(0.012);
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; roundRect(ctx, x, y, w, h, h / 2); ctx.fill();
       const g = ctx.createLinearGradient(x, 0, x + w, 0);
       g.addColorStop(0, '#5fd35f'); g.addColorStop(0.6, '#f2c200'); g.addColorStop(1, '#e53935');
       ctx.fillStyle = g; roundRect(ctx, x, y, Math.max(h, w * frac), h, h / 2); ctx.fill();
+      ctx.restore();
     }
   }
   QB.Renderer = Renderer;

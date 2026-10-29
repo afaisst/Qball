@@ -25,12 +25,13 @@ To host it, any static web host works. For example, turn on **GitHub Pages** (Se
 
 - **Physics, not animation:** every ball carries a velocity and a spin vector. Sliding and rolling friction, side-spin decay, cue-tip contact with miscues, squirt (cue deflection), swerve/massé with an elevated cue, ball–ball throw, and a research-based cushion model ([Mathavan et al. 2010](#references)). See [Physics model](#physics-model).
 - **Spin and elevation:** pick the tip contact point on a cue-ball diagram and raise the cue butt on a side view. Hitting outside the dashed ring is a miscue.
-- **Rail clearance:** near a cushion, the cue has to pass over the rail. The part of the cue ball you can't reach is shaded red, and raising the cue shrinks it.
+- **Rail clearance:** within 20 cm of a cushion, the cue has to pass over the rail. The part of the cue ball you can't reach is shaded red, and raising the cue shrinks it. When the cue lies over a pocket, there's no cushion under it, so the obstacle is the rail behind the hole: farther back, which frees up draw shots.
 - **Games:** 8-, 9- and 10-ball racks plus free practice. 9-ball and 10-ball use (simplified) foul rules with ball in hand.
+- **Lessons:** step-by-step introductions with explanations (Lesson 1: the stop shot).
 - **Drills:** Billiard University–style target drills with level progression and scoring, and pattern drills (L-drill, line-ups, rail balls, diamond grid, Dr. Dave's 3-ball drill, random layouts, play the ghost).
 - **Free ball placement:** build any position from all 15 balls.
-- **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table.
-- **Aiming aids** (each can be turned off): aim line, ghost ball, object-ball path, cue-ball path after contact, tangent line, ball trails, practice markings.
+- **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table. Balls have a satin finish with light wear (faint chalk marks and scuffs), the cloth has a felt texture with a faint nap and light wear along the break lane, and the rails are grained wood (all textures are generated in the browser, `js/textures.js`). Pocketed balls don't just vanish: they drop into the pocket, rattle off its wall (a slow ball circles the rim), bounce on the bottom and settle in the pocket (several balls stack up in the same pocket). They stay there until they are re-spotted or re-racked (a visual animation; the physics and rules count the ball as pocketed the moment its centre crosses the drop line). After a shot the 3D camera pulls back to an overview of the whole table while the balls roll, then returns to your aiming view (can be turned off).
+- **Aiming aids** (each can be turned off): aim line, ghost ball, a red cross on the cue ball where the tip will hit (3D), an **eclipse view** (a small inset looking exactly along the cue line: the cue ball's outline over the object ball shows the ball fraction, e.g. 50% for a half-ball hit), object-ball path, cue-ball path (after hitting a ball or a cushion), tangent line, ball trails, practice markings.
 - **Test mode** for physics experiments: exact inputs, sliders for every physics parameter, shot reports, replay, slow motion, and copy/paste of complete shots as JSON.
 
 ## How to play
@@ -39,21 +40,41 @@ To host it, any static web host works. For example, turn on **GitHub Pages** (Se
 
 | Action | How |
 |---|---|
-| Aim | Move the mouse. <kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine). <kbd>Space</kbd> locks the aim. |
-| Shoot | Press on the table, drag back to pull the cue, release. <kbd>Esc</kbd> cancels. |
+| Aim | Move the mouse. **Click** on the table to freeze the aim, so you can go to the panel without losing it; click again to release (a shot also releases it). <kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine). <kbd>Space</kbd> locks the aim. |
+| Shoot | Press anywhere on the table, drag back to pull the cue, release. <kbd>Esc</kbd> cancels. |
 | Spin | Click/drag on the cue-ball diagram, or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>. <kbd>C</kbd> or double-click centers it. |
 | Cue elevation | Drag the side-view diagram, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower. Double-click for a level cue. |
 | Ball in hand | Drag the cue ball where you want it. |
 | View | 2D / Split / 3D in the top bar. <kbd>V</kbd> cycles; the choice is remembered. |
 | Test mode | The small *test mode* link at the bottom right, or <kbd>T</kbd>. |
 
+### Touch screens (iPad, tablets)
+
+Touch is detected automatically. With a mouse, the **👆 Touch mode** button in the top bar turns on the same controls (the button is hidden on touch-only devices, where they're always on). There's no hover on a touch screen, so:
+
+- **Aim:** drag a finger anywhere on the table and the cue points toward it. For fine aiming, start the drag on the cue ball and move sideways; 1 cm of finger motion turns the cue by about 0.1°.
+- **Shoot:** in the 2D view a pull-down cue appears on the right (the same one the 3D view has). Drag it down and let go.
+- **3D view:** drag to aim, pinch to zoom. Double-tap the map to return to your shot.
+- **Spin and elevation:** tap or drag on the diagrams; use the *center* and *level* buttons to reset.
+- In portrait orientation the panel moves below the table. On a phone (or any tall, narrow view) the 2D table is drawn upright, with the head rail at the bottom, whenever that makes it bigger; the top bar wraps onto two lines.
+
 ### 3D cue view
 
 - **Aim:** drag left/right (<kbd>Shift</kbd> for fine steps). The 3D view doesn't follow the mouse.
 - **Shoot:** drag the little cue on the right side down to pull back, then release.
 - **Zoom:** mouse wheel. Zooming in gets you down on the shot (eye just above the cue); zooming out stands you up. When you raise the cue, the view backs off automatically so the whole stick stays visible.
-- **Map:** in 3D-only view, a small top-view map appears for ball in hand and arranging balls; the 🗺 button shows it any time.
-- **Walk mode:** press **🚶 walk** to stand up where you are. On the map, drag the blue dot to move or click where to go; you walk around the table, not through it. While you move, your eyes stay on the spot you were looking at. Drag the 3D view to look around (↔ turn, ↕ up/down); the wheel bends you down. Press walk again, double-click the map, or pick up the cue to return to your shot.
+- **Map:** in 3D-only view, a small top-view map appears for ball in hand and arranging balls; the 🗺 button shows it any time. It sits in the lower left; drag it anywhere by the ✥ grip in its corner (double-click the grip to put it back).
+- **Walk mode:** press **🚶 walk**, or keep zooming out after you're standing, to stand up where you are. Everything is steered from the map: drag the blue dot to move (or click where to go; you walk around the table, not through it) and drag the blue view cone to turn, or double-click (double-tap) anything in the 3D view — a ball or a spot on the cloth — to look at it; a ball in front hides the ones behind it. Double-clicking in the 3D view from your shot stands you up into walk mode looking there. Turning fixes a spot on the table (shown as a ring on the map: the middle of where your line of sight crosses the table), and as you walk you keep facing it. You can also drag the crosshair itself, e.g. onto a ball (it snaps to the ball), to keep looking at that ball while you walk around it. Point the cone off the table to release it; your direction then stays the same while you walk. The wheel (or a pinch) on the 3D view bends you down toward the table. The cue walks with you: while walking you carry it (shown see-through, along your line of sight; on the map through the blue dot), and when you return to your shot (press walk again, double-click the map, or pick up the cue) you aim in that direction, with the zoom you had before.
+
+### Lessons
+
+Step-by-step introductions (the **Lessons** tab). Each lesson sets the balls up for you and limits what you can change, so it is about one thing at a time. Short pop-ups explain each step, the panel shows a strength meter (soft / medium / hard) and the result of every shot, and the balls are set up again after each shot. *Show the instructions* brings the current step's text back.
+
+- **Lesson 1 · The stop shot:** a straight shot into the side pocket with the aim fixed; you choose the strength and how low you hit the cue ball (on the vertical line through its centre, at or below it).
+  1. *Center ball*, soft / medium / hard: soft follows, medium and hard stop (a sliding cue ball stops, a rolling one follows).
+  2. *A little below center* (green marker): soft follows much less, medium stops dead, hard draws back.
+
+New lessons are defined in `js/lessons.js` (balls, limits, strength bands, steps and texts).
 
 ### Games
 
@@ -89,12 +110,12 @@ Draw shots and raised-cue shots leave a small chalk mark on the cloth, like on a
 | Pockets | corner mouth 4.5″, side 5″, jaw angles 142° / 104° |
 | Ball | R = 28.575 mm, m = 0.17 kg |
 | Sliding friction μs | 0.11 |
-| Rolling resistance μr | 0.022 |
+| Rolling resistance μr | 0.0155 |
 | Side-spin decay | 20 rad/s² |
-| Ball–ball restitution | 0.95 |
+| Ball–ball restitution | 0.975 |
 | Ball–ball friction | μ = 0.00995 + 0.108·e^(−1.088·slip) (measured curve) |
 | Cushion model | Mathavan 2010 (alternatives: Han 2005, simple) |
-| Cushion restitution / friction | e = 0.85 (−0.004 per m/s), μc = 0.25, nose at 63.5% of ball height |
+| Cushion restitution / friction | e = 0.85 (−0.018 per m/s), μc = 0.25, nose at 63.5% of ball height |
 | Cue | 0.54 kg, end mass 3 g (squirt), tip friction 0.66, max speed 6 m/s, elevation 0–80° |
 | Timestep | 0.2 ms, with exact rewind to each collision |
 
@@ -145,7 +166,9 @@ js/table.js         table geometry: cushions, pocket jaws, diamonds, spots
 js/physics.js       ball motion, collisions, cushion models, cue impact
 js/render.js        2D top view (canvas)
 js/view3d.js        3D cue view and walk mode (three.js)
+js/textures.js      procedural cloth, felt and wood textures
 js/setups.js        game racks and drill definitions
+js/lessons.js       lessons: setups, limits, steps and texts
 js/audio.js         sounds (Web Audio, generated)
 js/main.js          input, game and drill logic, UI
 js/vendor/          three.js r149 (MIT license)

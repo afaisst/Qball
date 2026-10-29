@@ -50,17 +50,17 @@ QB.C = {
 QB.defaultParams = function () {
   return {
     muSlide: 0.11,   // ball-cloth sliding friction coefficient (typ. 0.15-0.25)
-    muRoll: 0.022,   // rolling resistance coefficient (literature 0.005-0.015; tuned by feel)
+    muRoll: 0.0155,  // rolling resistance coefficient (literature 0.005-0.015; tuned by feel)
     spinDecel: 20.0, // rad/s^2, decay of vertical-axis (side) spin
     cueEndMass: 0.003, // kg, effective end mass of the shaft -> squirt (0 = no squirt; low-deflection ~0.005)
     tipFriction: 0.66, // chalked tip-ball friction; miscue when tan(offset angle) > this -> limit = mu/sqrt(1+mu^2) = 0.55R
     ballFriction: 1.0, // scale on measured ball-ball friction (0.01-0.11 vs slip speed) -> throw; 0 = frictionless
-    eBall: 0.95,     // ball-ball coefficient of restitution (phenolic: 0.92-0.98)
+    eBall: 0.975,    // ball-ball coefficient of restitution (phenolic: 0.92-0.98)
     eCushion: 0.85,  // cushion coefficient of restitution
     muCushion: 0.25, // ball-cushion friction (used by the 'realistic' cushion model)
     cushionModel: 'mathavan', // 'mathavan' (2010, cushion + slate friction) | 'realistic' (Han 2005) | 'simple'
     cushionHeight: 0.635, // cushion nose height / ball diameter (WPA 0.625-0.645); higher = more spin reversal
-    eCushionSlope: 0.004,   // e drops by this much per m/s of normal impact speed (harder hits -> deader cushion)
+    eCushionSlope: 0.018,   // e drops by this much per m/s of normal impact speed (harder hits -> deader cushion)
   };
 };
 

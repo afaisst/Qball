@@ -476,10 +476,11 @@ window.QB = window.QB || {};
     }
 
     pocket(b, p) {
+      const ex = b.x, ey = b.y, evx = b.vx, evy = b.vy;   // how it went in (for the drop animation)
       b.onTable = false; b.pocketedIn = p.id;
       b.trail.push(p.x, p.y);
       b.x = p.x; b.y = p.y; b.stop();
-      this.events.push({ type: 'pocket', t: this.time, ball: b.id, pocket: p.id, pocketName: p.name });
+      this.events.push({ type: 'pocket', t: this.time, ball: b.id, pocket: p.id, pocketName: p.name, x: ex, y: ey, vx: evx, vy: evy });
     }
 
     clearTrails() { for (const b of this.balls) b.trail = []; }

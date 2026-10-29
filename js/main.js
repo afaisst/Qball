@@ -10,6 +10,16 @@
   try { if (window.THREE) view3d = new QB.CueView($('cueView'), table); } catch (e) { console.warn('Cue view unavailable:', e); }
   const stageEl = $('stage');
   const cueViewOn = () => !!view3d && S.view !== '2d';
+  // ---- touch (iPad / tablet): there is no hover, so aiming is done by dragging and shooting with the side cue ----
+  // Touch mode can also be switched on for a mouse (button in the top bar): then the mouse works like a finger.
+  const realTouch = (ev) => ev.pointerType === 'touch' || ev.pointerType === 'pen';
+  const isTouchPtr = (ev) => realTouch(ev) || !!S.touchMode;
+  function noteInput(ev) {
+    const t = isTouchPtr(ev);
+    if (t !== document.body.classList.contains('touch')) { document.body.classList.toggle('touch', t); setTimeout(onResize, 0); }
+  }
+  try { if (navigator.maxTouchPoints > 0 && window.matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch'); } catch (e) { /* ignore */ }
+  window.addEventListener('pointerdown', noteInput, true);
 
   // ---------------- App state ----------------
   const S = {
@@ -67,11 +77,56 @@
   // that means hitting high on the ball; raising the cue frees up lower contact points. If the chosen contact
   // point can't be reached, the cue is displaced upward (toward follow) to the lowest point that clears.
   const RAIL_RANGE = 0.20, NOSE_TOP = C.CUSHION_H_FRAC * 2 * R, CUE_R = 0.0065;
-  function noseDist(px, py, ux, uy) {        // distance from (px,py) along (ux,uy) to the cushion-nose rectangle
+  // What the cue has to pass over: the cushions (nose to rail, including the jaw facings). At a pocket there is no
+  // cushion: the cue passes over the mouth, the throat and the hole, and the first thing it meets is the rail
+  // behind the hole. So near a pocket the obstacle is set back and lower contact points (draw) become possible.
+  // Open area = playing surface ∪ each pocket's mouth (between the jaws) ∪ its throat + hole (convex hull).
+  const openPolys = (() => {
+    const hull = (pts) => {                 // monotone chain, counter-clockwise
+      pts = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+      const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+      const lo = [], up = [];
+      for (const q of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+      for (let i = pts.length - 1; i >= 0; i--) { const q = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+      return lo.slice(0, -1).concat(up.slice(0, -1));
+    };
+    const ends = [];                        // cushion ends: nose end P and jaw end J (at the rail)
+    for (const cu of table.cushions) { ends.push({ P: cu.pts[1], J: cu.pts[0] }); ends.push({ P: cu.pts[2], J: cu.pts[3] }); }
+    const polys = [hull([{ x: -table.L2, y: -table.W2 }, { x: table.L2, y: -table.W2 }, { x: table.L2, y: table.W2 }, { x: -table.L2, y: table.W2 }])];
+    for (const pk of table.pockets) {
+      const two = ends.slice().sort((e, f) => Math.hypot(e.P.x - pk.mouth.x, e.P.y - pk.mouth.y) - Math.hypot(f.P.x - pk.mouth.x, f.P.y - pk.mouth.y)).slice(0, 2);
+      polys.push(hull([two[0].P, two[0].J, two[1].J, two[1].P]));                        // mouth, between the jaws
+      const circ = []; for (let k = 0; k < 32; k++) circ.push({ x: pk.x + pk.r * Math.cos(k * Math.PI / 16), y: pk.y + pk.r * Math.sin(k * Math.PI / 16) });
+      polys.push(hull([two[0].J, two[1].J, ...circ]));                                   // throat and hole
+    }
+    return polys;
+  })();
+  const inPoly = (poly, x, y) => {
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      if ((b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) < -1e-9) return false;
+    }
+    return true;
+  };
+  const exitPoly = (poly, x, y, ux, uy) => {  // distance along (ux,uy) from (x,y) (inside) to the polygon edge
     let t = Infinity;
-    if (ux > 1e-9) t = Math.min(t, (table.L2 - px) / ux); else if (ux < -1e-9) t = Math.min(t, (-table.L2 - px) / ux);
-    if (uy > 1e-9) t = Math.min(t, (table.W2 - py) / uy); else if (uy < -1e-9) t = Math.min(t, (-table.W2 - py) / uy);
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length], nx = b.y - a.y, ny = -(b.x - a.x);   // outward normal (CCW)
+      const dn = ux * nx + uy * ny;
+      if (dn > 1e-12) t = Math.min(t, ((a.x - x) * nx + (a.y - y) * ny) / dn);
+    }
     return Math.max(0, t);
+  };
+  function noseDist(px, py, ux, uy) {        // distance from (px,py) along (ux,uy) to the first rail/cushion the cue crosses
+    let t = 0;
+    for (let k = 0; k < 6; k++) {             // hop from one open region into the next (table -> mouth -> throat/hole)
+      const x = px + ux * (t + 1e-5), y = py + uy * (t + 1e-5);
+      let best = -1;
+      for (const poly of openPolys) if (inPoly(poly, x, y)) best = Math.max(best, t + 1e-5 + exitPoly(poly, x, y, ux, uy));
+      if (best <= t + 1e-5) break;
+      t = best;
+    }
+    return t;
   }
   const nearRail = () => !!cue && cue.onTable && noseDist(cue.x, cue.y, -Math.cos(S.aim), -Math.sin(S.aim)) < RAIL_RANGE;
   // clearance (m) between the bottom of the cue and the cushion top for a hit at (a, b) in units of R; >= 0 = OK
@@ -106,6 +161,7 @@
   function defaultStatus() {
     if (S.ballInHand) return setStatus(`Ball in hand (${S.ballInHand === 'kitchen' ? 'behind the head string' : 'anywhere'}) — drag the cue ball, then aim & shoot`);
     if (S.act.kind === 'drill' && S.mode !== 'test') return setStatus(drillById(S.act.id).goal);
+    if (S.act.kind === 'lesson') return setStatus(lessonStatus());
     if (placeMode() && S.arrange) return setStatus('Arrange: drag balls from the panel onto the table (drag a ball off the table or double-click it to remove). Then click the Arranging button (or press M) to shoot.');
     setStatus(S.mode === 'test'
       ? 'Test mode — drag balls to set up, aim, then pull back & release (or Enter to shoot at the set speed)'
@@ -214,6 +270,7 @@
         if (rep) { rep.cushions++; (rep.railTimes = rep.railTimes || []).push(e.t); }
       } else if (e.type === 'pocket') {
         QB.Sound.pocket();
+        startDrop(e);
         if (rep) rep.pockets.push({ ball: world.balls[e.ball].num, pocket: e.pocketName });
       } else if (e.type === 'roll' && rep && rep.first && !rep.cbRoll && e.ball === cue.id && e.t > rep.t0 + rep.first.t) {
         rep.cbRoll = { dir: normAng(Math.atan2(e.vy, e.vx) - rep.first.inAng) * DEG, speed: Math.hypot(e.vx, e.vy) };
@@ -242,8 +299,9 @@
     }
     if (S.act.kind === 'game') afterGameShot(rep, msgs);
     else if (S.act.kind === 'drill') afterDrillShot(rep, scratched);
+    else if (S.act.kind === 'lesson') afterLessonShot(rep, scratched);
     renderReport();
-    if (S.act.kind !== 'drill') { if (msgs.length) setStatus(msgs.join(' · '), true); else defaultStatus(); }
+    if (S.act.kind !== 'drill' && S.act.kind !== 'lesson') { if (msgs.length) setStatus(msgs.join(' · '), true); else defaultStatus(); }
     updateActivityUI();
     syncInputs(true);
   }
@@ -258,13 +316,14 @@
   const placeMode = () => S.act.kind === 'game' && S.act.id === 'place';
   const isMap = () => S.view === '3d';     // in 3D-only view the top view is the small map
   function returnToShot() {
-    if (view3d && view3d.walk) { view3d.stopWalk(); S.walkDrag = false; setStatus('Back at your shot.'); }
+    // the cue came along: you're back at the shot, aiming the way you were facing
+    if (view3d && view3d.walk) { view3d.stopWalk(); S.walkDrag = false; setStatus('Back at your shot, aiming the way you were facing.'); }
   }
   // Walk mode (3D only): stand up where you are; move the blue dot on the map, drag the 3D view to look around
   function startWalking() {
     if (!view3d || S.view !== '3d' || view3d.walk) return;
-    view3d.startWalk(cue.onTable ? cue : null);
-    setStatus('Walking: drag the blue dot on the map (or click where to go) · drag the view to look around · wheel to bend down · Walk again or double-click the map to return to your shot.');
+    view3d.startWalk();
+    setStatus('Walking: drag the blue dot on the map to move (or click where to go) · drag the blue view cone to look at a spot (you keep facing it as you walk) · wheel / pinch on the 3D view to bend down · 🚶 again, double-click the map or pick up the cue: back to your shot.');
   }
   function toggleWalk() { if (view3d && view3d.walk) returnToShot(); else startWalking(); }
   function canDrag(b, shift) {
@@ -285,9 +344,13 @@
       if (view3d) {
         startWalking();
         if (view3d.walk) {
-          // grab the blue dot and drag it, or click anywhere else to walk there (around the table)
-          S.walkDrag = view3d.walkerAt(p.x, p.y) ? 'dot' : 'glide';
-          view3d.moveWalker(p.x, p.y, S.walkDrag === 'glide');
+          // drag the blue dot to move, drag the view cone to turn, click anywhere else to walk there
+          const w = view3d.walk;
+          if (view3d.focusAt(p.x, p.y)) S.walkDrag = 'focus';      // the fixed point (crosshair)
+          else if (view3d.walkerAt(p.x, p.y)) S.walkDrag = 'dot';
+          else if (view3d.coneAt(p.x, p.y)) { S.walkDrag = 'cone'; S.coneDrag = { yaw0: w.yaw, a0: Math.atan2(p.y - w.y, p.x - w.x) }; }
+          else S.walkDrag = 'glide';
+          if (S.walkDrag === 'dot' || S.walkDrag === 'glide') view3d.moveWalker(p.x, p.y, S.walkDrag === 'glide');
           canvas.setPointerCapture(ev.pointerId);
         }
       }
@@ -299,15 +362,41 @@
       canvas.classList.add('grabbing');
     } else if ((S.mode === 'test' && S.moveMode) || (placeMode() && S.arrange)) {
       return;
+    } else if (isTouchPtr(ev)) {
+      // touch: drag to aim. Starting on/near the cue ball = fine aiming (sideways finger motion turns the cue slowly).
+      if (!cue.onTable || S.aimLocked) return;
+      const nearR = Math.max(0.08, 30 * renderer.view.dpr / renderer.view.scale);
+      const fine = Math.hypot(p.x - cue.x, p.y - cue.y) < nearR;
+      S.touchAim = { fine, a0: S.aim, p0: p };
+      if (!fine) touchAimTo(p);
     } else if (cue.onTable) {
-      S.phase = 'pull'; S.pullStart = p; S.pull = 0;
-    }
+      // press anywhere: drag back to pull the cue and shoot; a plain click (no drag) freezes / unfreezes the aim
+      S.phase = 'pull'; S.pullStart = p; S.pull = 0; S.pressPx = { x: ev.clientX, y: ev.clientY };
+    } else return;
     canvas.setPointerCapture(ev.pointerId);
   });
 
+  function touchAimTo(p) {
+    const t = S.touchAim; if (!t) return;
+    if (t.fine) {          // 1 cm of sideways finger motion (on the table scale) ≈ 0.1°
+      const nx = -Math.sin(t.a0), ny = Math.cos(t.a0);
+      S.aim = normAng(t.a0 + ((p.x - t.p0.x) * nx + (p.y - t.p0.y) * ny) / 5);
+    } else if (Math.hypot(p.x - cue.x, p.y - cue.y) > R * 1.3) S.aim = Math.atan2(p.y - cue.y, p.x - cue.x);
+  }
   canvas.addEventListener('pointermove', (ev) => {
     const p = renderer.toWorld(ev.clientX, ev.clientY);
+    if (S.touchAim) { S.pointer = p; touchAimTo(p); return; }
     S.pointer = p;
+    if (S.walkDrag === 'focus') {            // move the fixed point; it snaps onto a ball when dropped near one
+      let fx = p.x, fy = p.y;
+      for (const b of world.balls) if (b.onTable && Math.hypot(b.x - p.x, b.y - p.y) < 0.04) { fx = b.x; fy = b.y; }
+      view3d.setFocus(fx, fy);
+      return;
+    }
+    if (S.walkDrag === 'cone') {             // turn: the cone follows the pointer around the dot
+      const w = view3d.walk; if (w) view3d.setYaw(S.coneDrag.yaw0 + normAng(Math.atan2(p.y - w.y, p.x - w.x) - S.coneDrag.a0));
+      return;
+    }
     if (S.walkDrag) { view3d.moveWalker(p.x, p.y, S.walkDrag === 'glide'); return; }
     if (S.phase === 'drag') {
       const region = (S.mode === 'play' && S.dragBall === cue && S.ballInHand === 'kitchen') ? 'kitchen' : null;
@@ -321,28 +410,42 @@
       const dx = Math.cos(S.aim), dy = Math.sin(S.aim);
       const back = -((p.x - S.pullStart.x) * dx + (p.y - S.pullStart.y) * dy);
       S.pull = Math.max(0, Math.min(C.MAX_PULL, back));
-    } else if (S.phase === 'aim' && !S.aimLocked && cue.onTable && !isMap()) {
-      if (Math.hypot(p.x - cue.x, p.y - cue.y) > R * 1.3) S.aim = Math.atan2(p.y - cue.y, p.x - cue.x);
+    } else if (S.phase === 'aim' && !S.aimLocked && cue.onTable && !isMap() && ev.pointerType === 'mouse' && !S.touchMode) {
+      if (Math.hypot(p.x - cue.x, p.y - cue.y) > R * 1.3) S.aim = Math.atan2(p.y - cue.y, p.x - cue.x);   // aim follows the mouse
     }
     // cursor hint
-    canvas.classList.toggle('grab', S.phase === 'aim' && canDrag(ballAt(p), ev.shiftKey || S.shiftDown));
+    canvas.classList.toggle('grab', (S.phase === 'aim' && canDrag(ballAt(p), ev.shiftKey || S.shiftDown))
+      || (isMap() && !!view3d && !!view3d.walk && (view3d.focusAt(p.x, p.y) || view3d.walkerAt(p.x, p.y) || view3d.coneAt(p.x, p.y))));
   });
 
-  canvas.addEventListener('pointerup', () => {
+  canvas.addEventListener('pointerup', (ev) => {
     canvas.classList.remove('grabbing');
-    if (S.walkDrag) { S.walkDrag = false; view3d.endMove(); return; }
+    if (S.touchAim) { S.touchAim = null; return; }
+    if (S.walkDrag) {
+      S.walkDrag = false; view3d.endMove();
+      // touch has no double-click: a quick double tap on the map returns to the shot
+      if (isTouchPtr(ev)) { const now = performance.now(); if (now - (S.lastMapTap || 0) < 350) { returnToShot(); S.lastMapTap = 0; } else S.lastMapTap = now; }
+      return;
+    }
     if (S.phase === 'drag') {
       if (S.dragBall !== cue) S.selBall = S.dragBall;
       if (placeMode()) updateActivityUI();
       S.phase = 'aim'; S.dragBall = null; S.setup = null; syncInputs(true); return;
     }
     if (S.phase === 'pull') {
-      if (S.pull > 0.004) beginStrike(speedFromPull(S.pull));
-      else { S.phase = 'aim'; S.pull = 0; }
+      const moved = S.pressPx ? Math.hypot(ev.clientX - S.pressPx.x, ev.clientY - S.pressPx.y) : 99;
+      if (S.pull > 0.004) { beginStrike(speedFromPull(S.pull)); if (S.clickLock) { S.aimLocked = false; S.clickLock = false; } }
+      else {
+        S.phase = 'aim'; S.pull = 0;
+        if (moved < 6) {                     // a click: freeze the aim (so you can go to the panel), click again to release
+          S.aimLocked = !S.aimLocked; S.clickLock = S.aimLocked;
+          setStatus(S.aimLocked ? 'Aim frozen — set spin and elevation, then drag back on the table to shoot. Click again to release.' : 'Aim follows the mouse again.');
+        }
+      }
     }
   });
   canvas.addEventListener('pointercancel', () => { if (S.walkDrag) { S.walkDrag = false; view3d.endMove(); } });
-  canvas.addEventListener('pointercancel', () => { if (S.phase === 'pull' || S.phase === 'drag') { S.phase = 'aim'; S.pull = 0; } });
+  canvas.addEventListener('pointercancel', () => { S.touchAim = null; if (S.phase === 'pull' || S.phase === 'drag') { S.phase = 'aim'; S.pull = 0; } });
 
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'Shift') S.shiftDown = true;
@@ -352,8 +455,8 @@
       if (S.phase !== 'aim') return;
       const step = (ev.shiftKey ? 1 : ev.altKey ? 0.01 : 0.1) / DEG;
       S.aim = normAng(S.aim + ((k === 'ArrowLeft' || k === 'ArrowUp') ? step : -step));
-      S.aimLocked = true; ev.preventDefault();
-    } else if (k === ' ') { S.aimLocked = !S.aimLocked; ev.preventDefault(); }
+      S.aimLocked = true; S.clickLock = false; ev.preventDefault();
+    } else if (k === ' ') { S.aimLocked = !S.aimLocked; S.clickLock = false; ev.preventDefault(); }
     else if (k === 'Escape') { if (!$('menu').hidden) showMenu(null); else if (S.phase === 'pull') { S.phase = 'aim'; S.pull = 0; } }
     else if (k === 'Enter') { if (S.phase === 'aim' && S.mode === 'test') shootFromPanel(); }
     else if (k === 't' || k === 'T') setMode(S.mode === 'test' ? 'play' : 'test');
@@ -401,6 +504,10 @@
   // ---------------- Cue tip (spin) selector ----------------
   const tipCanvas = $('tipPad');
   function setTip(x, y) {
+    if (S.act.kind === 'lesson') {             // lessons limit where the tip may go
+      const L = lessonById(S.act.id), tr = L.tipRange;
+      if (tr) { x = Math.max(tr.x[0], Math.min(tr.x[1], x)); y = Math.max(tr.y[0], Math.min(tr.y[1], y)); }
+    }
     const r = Math.hypot(x, y), m = C.TIP_MAX;
     if (r > m) { x *= m / r; y *= m / r; }
     S.tipX = Math.round(x * 1000) / 1000; S.tipY = Math.round(y * 1000) / 1000;
@@ -460,6 +567,7 @@
       ctx.setLineDash([3 * dpr, 3 * dpr]); ctx.strokeStyle = 'rgba(30,30,30,0.7)'; ctx.lineWidth = 1.5 * dpr;
       ctx.beginPath(); ctx.arc(c + S.tipX * r, c - S.tipY * r, r * 0.12, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
+    if (S.act.kind === 'lesson') lessonPadOverlay(ctx, c, r, dpr);
     const tx = c + E.x * r, ty = c - E.y * r;
     const mis = Math.hypot(E.x, E.y) > QB.miscueLimit(world.params) + 1e-9;
     ctx.fillStyle = mis || E.blocked ? 'rgba(220,40,40,0.9)' : 'rgba(59,111,216,0.85)';
@@ -481,6 +589,7 @@
   // ---------------- Cue elevation selector (side view) ----------------
   const elevCanvas = $('elevPad');
   function setElev(deg) {
+    if (S.act.kind === 'lesson') deg = 0;      // lessons are played with a level cue
     S.elev = Math.round(Math.max(0, Math.min(C.MAX_ELEV, deg)) * 10) / 10;
     drawTipPad(); drawElevPad();
     const el = $('inElev'); if (el && document.activeElement !== el) el.value = S.elev.toFixed(1);
@@ -634,7 +743,9 @@
   }
   function restartActivity() {
     if (S.phase === 'moving') stopAll();
-    if (S.act.kind === 'drill') startDrill(S.act.id, S.act.n); else startGame(S.act.id);
+    if (S.act.kind === 'drill') startDrill(S.act.id, S.act.n);
+    else if (S.act.kind === 'lesson') startLesson(S.act.id);
+    else startGame(S.act.id);
   }
 
   function afterGameShot(rep, msgs) {
@@ -723,6 +834,8 @@
   }
 
   function updateActivityUI() {
+    $('lessonHud').hidden = S.act.kind !== 'lesson';
+    if (S.act.kind === 'lesson') return updateLessonUI();
     const a = S.act, isDrill = a.kind === 'drill';
     const d = isDrill ? drillById(a.id) : null, g = !isDrill ? gameById(a.id) : null;
     $('actTitle').textContent = isDrill ? `Drill · ${d.name}` : g.name;
@@ -768,6 +881,121 @@
     }
   }
 
+  // ---------------- Lessons (js/lessons.js): step-by-step introductions ----------------
+  const lessonById = (id) => QB.LESSONS.find(l => l.id === id);
+  const lessonStepObj = () => { const a = S.act, L = lessonById(a.id); return L.steps[a.step] || null; };
+  function startLesson(id) {
+    const L = lessonById(id);
+    S.act = { kind: 'lesson', id, step: 0, results: L.steps.map(() => ({})), done: false, last: null };
+    placeLessonBalls();
+    setTip(0, 0); setElev(0);
+    updateActivityUI(); renderReport(); syncInputs(true); defaultStatus();
+    lessonModal(L.intro.title, L.intro.html, [{ label: "Let's start", primary: true, run: () => showLessonStep() }]);
+  }
+  function placeLessonBalls() {
+    const a = S.act, L = lessonById(a.id);
+    if (S.phase === 'moving') stopAll();
+    setBalls(L.balls(table));
+    S.ballInHand = false; S.aimLocked = true; S.clickLock = false;
+    const ob = world.balls.find(b => b.num === L.aimAt);
+    a.aim = Math.atan2(ob.y - cue.y, ob.x - cue.x); S.aim = a.aim;
+    a.start = { cx: cue.x, cy: cue.y, ox: ob.x, oy: ob.y };
+    clearShotMarks();
+  }
+  function showLessonStep() {
+    const a = S.act, L = lessonById(a.id), st = lessonStepObj();
+    if (!st) return;
+    lessonModal(`Step ${a.step + 1} of ${L.steps.length} · ${st.title}`, st.html, [{ label: 'Got it', primary: true }]);
+    updateActivityUI(); defaultStatus(); drawTipPad();
+  }
+  function lessonBand(speed) { const L = lessonById(S.act.id); return L.bands.find(b => speed < b.max) || L.bands[L.bands.length - 1]; }
+  function lessonStatus() {
+    const a = S.act, st = lessonStepObj();
+    if (a.done || !st) return 'Lesson complete — repeat it, or pick another lesson from the Lessons tab.';
+    const left = lessonById(a.id).bands.filter(b => !a.results[a.step][b.id]).map(b => b.name.toLowerCase());
+    return `${st.title}: tip ${st.tip.label} · still to try: ${left.join(', ')}`;
+  }
+  function tipOkForStep(st) { return st && Math.abs(S.tipX) < 0.02 && Math.abs(S.tipY - st.tip.y) <= st.tip.tol; }
+  function describeResult(r) {
+    if (r.scratch) return 'cue ball went in the pocket';
+    const cm = Math.round(Math.abs(r.d) * 100);
+    return r.cls === 'stop' ? `stopped${cm >= 1 ? ` (${cm} cm)` : ''}` : r.cls === 'follow' ? `followed ${cm} cm` : `drew back ${cm} cm`;
+  }
+  function afterLessonShot(rep, scratched) {
+    const a = S.act, L = lessonById(a.id), st = lessonStepObj();
+    if (!st || a.done || !S.lastShot) { setTimeout(placeLessonBalls, 900); return; }
+    const band = lessonBand(S.lastShot.speed);
+    // how far the cue ball travelled after the hit, along the shot line (+ = follow, − = draw)
+    const ux = Math.cos(a.aim), uy = Math.sin(a.aim), hx = a.start.ox - ux * 2 * R, hy = a.start.oy - uy * 2 * R;
+    const d = cue.onTable ? (cue.x - hx) * ux + (cue.y - hy) * uy : 0;
+    const res = { d, scratch: scratched, cls: scratched ? 'scratch' : Math.abs(d) <= 0.05 ? 'stop' : d > 0 ? 'follow' : 'draw' };
+    const counts = tipOkForStep(st);
+    if (counts) a.results[a.step][band.id] = res;
+    a.last = { band: band.name, res, counts };
+    setStatus(counts ? `${band.name}: ${describeResult(res)}.` : `${band.name}: ${describeResult(res)} — but for this step put the tip ${st.tip.label}. This one doesn't count.`, true);
+    updateActivityUI();
+    const complete = L.bands.every(b => a.results[a.step][b.id]);
+    setTimeout(() => {
+      if (S.act !== a) return;
+      placeLessonBalls(); updateActivityUI();
+      if (!complete) return;
+      const rows = L.bands.map(b => `<tr><td><b>${b.name}</b></td><td>${describeResult(a.results[a.step][b.id])}</td></tr>`).join('');
+      const last = a.step === L.steps.length - 1;
+      lessonModal(`Step ${a.step + 1} · ${st.title}`, st.done(`<table>${rows}</table>`), [{ label: last ? 'Finish' : 'Next step', primary: true, run: () => {
+        if (last) { a.done = true; updateActivityUI(); defaultStatus();
+          lessonModal(L.finish.title, L.finish.html, [{ label: 'Repeat the lesson', run: () => startLesson(L.id) }, { label: 'All lessons', run: () => showMenu('lessons') }, { label: 'Close', primary: true }]);
+        } else { a.step++; setTip(0, 0); showLessonStep(); }
+      } }]);
+    }, 1300);
+  }
+  function updateLessonUI() {
+    const a = S.act, L = lessonById(a.id), st = lessonStepObj();
+    $('actTitle').textContent = `Lesson ${L.num} · ${L.name}`;
+    $('actInfo').textContent = a.done ? 'Lesson complete.' : st ? `Step ${a.step + 1}: ${st.title.toLowerCase()} — put the tip ${st.tip.label}, then shoot soft, medium and hard.` : '';
+    $('drillHud').hidden = true; $('trayBox').hidden = true;
+    for (const el of document.querySelectorAll('.drill-only, .place-only')) el.hidden = true;
+    $('btnRack').textContent = 'Restart lesson';
+    $('lessonSteps').innerHTML = L.steps.map((s, i) => `<span class="${i === a.step && !a.done ? 'on' : i < a.step || a.done ? 'done' : ''}">${i + 1}. ${s.title}</span>`).join('');
+    $('lessonBands').innerHTML = L.bands.map(b => `<span data-b="${b.id}">${b.name}</span>`).join('');
+    const res = a.done ? {} : a.results[a.step] || {};
+    $('lessonResults').innerHTML = a.done ? '<span class="ok">✓</span><span class="ok">All steps done.</span>'
+      : L.bands.map(b => `<span class="b">${b.name}</span>${res[b.id] ? `<span class="ok">✓ ${describeResult(res[b.id])}</span>` : '<span class="todo">not yet</span>'}`).join('');
+    S.lessonMeterKey = null;
+  }
+  // strength meter: which band the current pull (or the last shot) is in
+  function lessonMeter() {
+    const L = lessonById(S.act.id);
+    const v = S.phase === 'pull' ? speedFromPull(S.pull) : S.phase === 'strike' ? S.strikeSpeed : null;
+    const id = v !== null && v !== undefined ? lessonBand(v).id : '';
+    if (id === S.lessonMeterKey) return;
+    S.lessonMeterKey = id;
+    for (const el of document.querySelectorAll('#lessonBands span')) el.classList.toggle('on', el.dataset.b === id);
+  }
+  // on the cue-ball diagram: the line the tip may move on, and the step's target
+  function lessonPadOverlay(ctx, c, r, dpr) {
+    const L = lessonById(S.act.id), st = lessonStepObj(), tr = L.tipRange;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(59,111,216,0.45)'; ctx.lineWidth = 3 * dpr; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(c + tr.x[0] * r, c - tr.y[1] * r); ctx.lineTo(c + tr.x[0] * r, c - tr.y[0] * r); ctx.stroke();
+    if (st && !S.act.done) {
+      ctx.strokeStyle = '#3fbf6f'; ctx.lineWidth = 2.5 * dpr; ctx.setLineDash([4 * dpr, 3 * dpr]);
+      ctx.beginPath(); ctx.arc(c, c - st.tip.y * r, r * 0.17, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // pop-up: title, html, buttons [{label, primary, run}]
+  function lessonModal(title, html, buttons) {
+    $('lmTitle').textContent = title; $('lmBody').innerHTML = html;
+    const box = $('lmBtns'); box.innerHTML = '';
+    for (const b of buttons) {
+      const el = document.createElement('button'); el.textContent = b.label; if (b.primary) el.className = 'primary';
+      el.onclick = () => { $('lessonModal').hidden = true; if (b.run) b.run(); };
+      box.appendChild(el);
+    }
+    $('lessonModal').hidden = false;
+  }
+  $('btnLessonHelp').onclick = () => { if (S.act.kind === 'lesson' && !S.act.done) showLessonStep(); };
+
   // ---------------- Free ball placement ----------------
   function setArrange(on) { S.arrange = !!on; arrangeButton(); defaultStatus(); }
   function arrangeButton() {
@@ -812,6 +1040,8 @@
     $('menu').hidden = !which;
     $('menuGames').hidden = which !== 'games';
     $('menuDrills').hidden = which !== 'drills';
+    $('menuLessons').hidden = which !== 'lessons';
+    $('tabLessons').classList.toggle('active', which === 'lessons');
     $('tabTable').classList.toggle('active', !which);
     $('tabGames').classList.toggle('active', which === 'games');
     $('tabDrills').classList.toggle('active', which === 'drills');
@@ -821,6 +1051,17 @@
   function buildCards(which) {
     if (cardsBuilt[which]) return;
     cardsBuilt[which] = true;
+    if (which === 'lessons') {
+      const box = $('lessonCards'); box.innerHTML = '';
+      for (const L of QB.LESSONS) {
+        const card = document.createElement('button'); card.className = 'card';
+        card.innerHTML = `<canvas></canvas><div class="cbody"><div class="ctitle">${L.name}<span class="ctag">Lesson ${L.num}</span></div><div class="cdesc">${L.blurb}</div></div>`;
+        box.appendChild(card);
+        requestAnimationFrame(() => QB.Setups.drawDiagram(card.querySelector('canvas'), table, { balls: L.balls(table) }));
+        card.onclick = () => { showMenu(null); startLesson(L.id); };
+      }
+      return;
+    }
     const box = $(which === 'games' ? 'gameCards' : 'drillCards');
     // Free Ball Placement is implemented like a game but listed first under Drills
     const items = which === 'games' ? QB.Setups.GAMES.filter(g => g.menu !== 'drills')
@@ -896,7 +1137,8 @@
   $('tabTable').onclick = () => showMenu(null);
   $('tabGames').onclick = () => showMenu('games');
   $('tabDrills').onclick = () => showMenu('drills');
-  $('btnMenu').onclick = () => showMenu(S.act.kind === 'drill' || S.act.id === 'place' ? 'drills' : 'games');
+  $('tabLessons').onclick = () => showMenu('lessons');
+  $('btnMenu').onclick = () => showMenu(S.act.kind === 'lesson' ? 'lessons' : S.act.kind === 'drill' || S.act.id === 'place' ? 'drills' : 'games');
   $('btnRack').onclick = restartActivity;
   $('btnEasier').onclick = () => changeDrillLevel(-1);
   $('btnHarder').onclick = () => changeDrillLevel(+1);
@@ -914,6 +1156,20 @@
   $('inTipX').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) setTip(v, S.tipY); });
   $('inTipY').addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) setTip(S.tipX, v); });
   $('optSound').onchange = (e) => { QB.Sound.enabled = e.target.checked; };
+  // Touch mode toggle: hidden on touch-only devices (touch mode is always on there)
+  const touchOnly = (() => { try { return window.matchMedia('(hover: none) and (pointer: coarse)').matches; } catch (e) { return false; } })();
+  function setTouchMode(on, quiet) {
+    S.touchMode = !!on && !touchOnly;
+    $('btnTouch').classList.toggle('on', S.touchMode);
+    if (S.touchMode) document.body.classList.add('touch');
+    else if (!touchOnly) document.body.classList.remove('touch');
+    try { localStorage.setItem('qball.touch', S.touchMode ? '1' : '0'); } catch (e) { /* ignore */ }
+    setTimeout(onResize, 0);
+    if (!quiet) setStatus(S.touchMode ? 'Touch mode: drag on the table to aim (start on the cue ball for fine aiming), shoot with the cue on the right.' : 'Touch mode off: the aim follows the mouse; click to freeze it.', true);
+  }
+  $('btnTouch').hidden = touchOnly;
+  $('btnTouch').onclick = () => setTouchMode(!S.touchMode);
+  { let saved = false; try { saved = localStorage.getItem('qball.touch') === '1'; } catch (e) { /* ignore */ } if (saved) setTouchMode(true, true); }
   $('optTimeScale').oninput = (e) => { S.timeScale = parseFloat(e.target.value); $('tsVal').textContent = S.timeScale.toFixed(2) + '×'; };
 
   const posInputs = [['cbx', () => cue, 'x'], ['cby', () => cue, 'y'], ['obx', () => S.selBall, 'x'], ['oby', () => S.selBall, 'y']];
@@ -1098,8 +1354,72 @@
 
   // ---------------- Main loop ----------------
   let last = performance.now();
+  // ---------------- balls dropping into a pocket (visual only; the physics has already pocketed them) ----------------
+  // The ball keeps the speed it went in with, falls, bangs off the pocket wall (the deeper it is, the closer the wall:
+  // a fast ball rattles, a slow one circles the rim) and settles in the pocket bag, which is a little wider than the
+  // hole. It stays there (on top of any balls already in that pocket) until it is re-spotted or the balls are re-racked.
+  S.drops = [];
+  const DROP_FLOOR = -0.068 + R;                // ball centre resting on the pocket bottom (pocket 7 cm deep in 3D)
+  const BAG_EXTRA = 0.02;                       // the bag reaches 2 cm under the rail / cloth beyond the hole
+  function startDrop(e) {
+    const b = world.balls[e.ball], p = table.pockets[e.pocket];
+    if (!b || !p) return;
+    let x = e.x !== undefined ? e.x : p.x, y = e.y !== undefined ? e.y : p.y;
+    const d = Math.hypot(x - p.x, y - p.y);
+    if (d > p.r) { x = p.x + (x - p.x) / d * p.r; y = p.y + (y - p.y) / d * p.r; }   // (balls that left the table)
+    S.drops = S.drops.filter(q => q.b !== b);
+    S.drops.push({ b, p, x, y, z: R, vx: e.vx || 0, vy: e.vy || 0, vz: 0, t: 0, leaving: 0 });
+  }
+  function stepDrops(dt) {
+    for (const d of S.drops) {
+      if (world.balls.indexOf(d.b) < 0) { d.gone = true; continue; }        // a new rack replaced the balls
+      if (d.b.onTable) {                                                     // re-spotted: finish the drop, then vanish
+        d.leaving += dt;
+        if (d.t > 0.9 || d.leaving > 0.9) { d.gone = true; continue; }
+      }
+    }
+    S.drops = S.drops.filter(d => !d.gone);
+    for (let h = dt; h > 1e-9; h -= 0.002) {
+      const s = Math.min(h, 0.002);
+      for (const d of S.drops) dropStep(d, s);
+      // balls in the same pocket push each other apart and stack up
+      for (let i = 0; i < S.drops.length; i++) for (let j = i + 1; j < S.drops.length; j++) {
+        const a = S.drops[i], c = S.drops[j];
+        if (a.p !== c.p) continue;
+        const dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z, dist = Math.hypot(dx, dy, dz);
+        if (dist >= 2 * R || dist < 1e-9) continue;
+        const nx = dx / dist, ny = dy / dist, nz = dz / dist, push = (2 * R - dist) / 2;
+        a.x -= nx * push; a.y -= ny * push; a.z -= nz * push; c.x += nx * push; c.y += ny * push; c.z += nz * push;
+        const vn = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny + (c.vz - a.vz) * nz;
+        if (vn < 0) { const jn = -(1 + 0.3) * vn / 2; a.vx -= jn * nx; a.vy -= jn * ny; a.vz -= jn * nz; c.vx += jn * nx; c.vy += jn * ny; c.vz += jn * nz; }
+      }
+    }
+  }
+  function dropStep(d, s) {
+    const p = d.p; d.t += s;
+    // vertical: free fall, bounce on the pocket bottom
+    d.vz -= 9.81 * s; d.z += d.vz * s;
+    if (d.z < DROP_FLOOR) { d.z = DROP_FLOOR; d.vz = d.vz < -0.25 ? -d.vz * 0.3 : 0; }
+    // horizontal: the hole edge, then the bag wall; the deeper the ball, the farther out it can go
+    d.x += d.vx * s; d.y += d.vy * s;
+    const sink = Math.min(1, Math.max(0, (R - d.z) / R)), rw = p.r + (BAG_EXTRA - R) * sink;
+    const dx = d.x - p.x, dy = d.y - p.y, dist = Math.hypot(dx, dy);
+    if (dist > rw && dist > 1e-9) {
+      const nx = dx / dist, ny = dy / dist, vn = d.vx * nx + d.vy * ny;
+      d.x = p.x + nx * rw; d.y = p.y + ny * rw;
+      if (vn > 0) { d.vx -= 1.45 * vn * nx; d.vy -= 1.45 * vn * ny; }        // restitution 0.45, keeps the sideways speed
+      const k = Math.exp(-s * 1.5); d.vx *= k; d.vy *= k;                     // rubbing along the wall
+    }
+    if (d.z <= DROP_FLOOR + 1e-4 || Math.abs(d.vz) < 0.02) {                 // on the bottom (or resting on a ball)
+      const k = Math.exp(-s * 2.2); d.vx *= k; d.vy *= k;
+      if (Math.hypot(d.vx, d.vy) < 0.01) { d.vx = 0; d.vy = 0; }
+    }
+  }
+
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (S.act.kind === 'lesson' && S.phase !== 'moving' && S.act.aim !== undefined) S.aim = S.act.aim;   // fixed aim
+    if (S.act.kind === 'lesson') lessonMeter();
     if (S.phase === 'aim' || S.phase === 'pull' || S.phase === 'drag') {
       computeEffTip();
       if (padKey() !== S.padKey) { drawTipPad(); drawElevPad(); }
@@ -1118,6 +1438,7 @@
       if (!world.isMoving()) endShot();
       else syncInputs();
     }
+    if (S.drops.length) stepDrops(dt * S.timeScale);
     updatePrediction(now);
     updateCBPath(now);
     draw();
@@ -1136,16 +1457,22 @@
       renderer.drawTrails(world.balls);
       if (test && $('optContacts').checked) renderer.drawContactMarks(S.contacts);
     }
+    // walking: the cue walks with you, so the aim follows the direction you face (unless the aim is locked)
+    if (view3d && view3d.walk && S.phase === 'aim' && !S.aimLocked && cue.onTable) S.aim = normAng(view3d.walk.yaw);
     let aim = null;
     const aidsOn = $('optAimLine').checked, ghostOn = $('optGhost').checked;
     if ((S.phase === 'aim' || S.phase === 'pull') && cue.onTable) {
       aim = QB.computeAim(world, cue, squirtLine() ? launchAngle() : S.aim);
-      if ((aidsOn || ghostOn) && !(placeMode() && S.arrange)) renderer.drawAim(aim, { tangent: $('optTangent').checked, cutLabel: test, lines: aidsOn, ghost: ghostOn });
+      if ((aidsOn || ghostOn) && !(placeMode() && S.arrange)) renderer.drawAim(aim, { tangent: $('optTangent').checked, cutLabel: test, lines: aidsOn, ghost: ghostOn, bounce: $('optCBPath').checked });
       if (S.cbPath && !(placeMode() && S.arrange)) renderer.drawCBPath(S.cbPath);
       if (S.cbPath && S.cbPre && S.elev > 0.5 && Math.abs(S.tipX) > 0.005) renderer.drawCBPath(S.cbPre, { dash: true, arrow: false });
       if (S.ballInHand && S.phase === 'aim') renderer.drawLabel(cue, 'ball in hand — drag me');
-      else if (S.aimLocked) renderer.drawLabel(cue, 'aim locked · Space');
+      else if (S.aimLocked) renderer.drawLabel(cue, S.clickLock ? 'aim frozen · click to release' : 'aim locked · Space');
       $('cutVal').textContent = aim && aim.hit.type === 'ball' ? `${aim.cutDeg.toFixed(2)}°` : '–';
+    }
+    for (const d of S.drops) {                 // (drawn under the cloth's hole only; a ball under the rail is hidden)
+      const depth = Math.max(0, R - d.z);
+      renderer.drawBall(d.b, null, { x: d.x, y: d.y, scale: Math.max(0.35, 1 - depth / 0.2), shade: Math.min(0.75, depth / 0.1), clip: d.p });
     }
     for (const b of world.balls) {
       const hl = (S.phase === 'drag' && S.dragBall === b) ? 'rgba(79,179,255,0.9)'
@@ -1158,12 +1485,17 @@
     if (S.phase === 'strike') pb = S.strikeFrom * Math.max(0, 1 - S.strikeT / 0.07);
     updateMap();
     if (isMap() && view3d && view3d.walk) renderer.drawWalker(view3d.walkerOnMap());
-    if (cueViewOn()) drawPowerCue(pb);
-    if (cueViewOn()) view3d.render({ balls: world.balls, cue, aimAngle: S.aim, elev: S.elev / DEG, tipX: eff().x, tipY: eff().y,
-      pull: pb, showCue, showAids: !!aim && aidsOn && !arranging, showGhost: !!aim && ghostOn && !arranging, aim, cbPath: arranging ? null : S.cbPath, showTangent: $('optTangent').checked,
+    drawPowerCue(pb);                          // (hidden widgets have zero size and are skipped)
+    const eclOn = !!view3d && $('optEclipse').checked && (S.phase === 'aim' || S.phase === 'pull') && cue.onTable && !arranging;
+    $('eclipse').hidden = !eclOn;
+    if (cueViewOn() || eclOn) view3d.render({ drops: S.drops, drawMain: cueViewOn(), overview: S.phase === 'moving' && $('optOverview').checked, eclipse: eclOn ? eclEls : null, balls: world.balls, cue, aimAngle: S.aim, elev: S.elev / DEG, tipX: eff().x, tipY: eff().y,
+      pull: pb, showCue, showAids: !!aim && aidsOn && !arranging, showGhost: !!aim && ghostOn && !arranging, showTipMark: $('optTipMark').checked && !arranging, showBounce: $('optCBPath').checked, aim, cbPath: arranging ? null : S.cbPath, showTangent: $('optTangent').checked,
       zone: S.act.kind === 'drill' ? S.act.zone : null, chalk: S.chalk });
     if (showCue) {
-      renderer.drawCue(cue, S.aim, pb, 1, eff().x, S.elev / DEG);
+      if (view3d && view3d.walk) {           // walking: the cue is carried by the player (on the map: at the blue dot)
+        const w = view3d.walk, dx = Math.cos(w.yaw), dy = Math.sin(w.yaw);
+        renderer.drawCue({ x: w.x + dx * 1.3, y: w.y + dy * 1.3 }, w.yaw, 0, 0.45);   // centred on the dot and the view cone
+      } else renderer.drawCue(cue, S.aim, pb, 1, eff().x, S.elev / DEG);
       if (S.phase === 'pull') renderer.drawPowerGauge(cue, S.aim, S.pull / C.MAX_PULL);
     }
     // panel readouts
@@ -1178,6 +1510,7 @@
     const ai = $('inAim'); if (document.activeElement !== ai) ai.value = (S.aim * DEG).toFixed(2);
   }
 
+  const eclEls = { box: $('eclipse'), gl: $('eclipseGL'), ov: $('eclipseOV'), label: $('eclipseLabel') };
   function onResize() { renderer.resize(); if (view3d) view3d.resize(); }
 
   // ---------------- Views: 2D only / split / 3D only ----------------
@@ -1185,6 +1518,7 @@
     if (!view3d) v = '2d';
     if (v !== '3d' && view3d) view3d.stopWalk();
     S.view = v;
+    renderer.autoRotate = v !== '3d';         // the small map in 3D-only view always stays landscape
     stageEl.classList.toggle('no3d', v === '2d');
     stageEl.classList.toggle('only3d', v === '3d');
     if (v !== 'split') stageEl.classList.remove('swapped');
@@ -1203,6 +1537,38 @@
   $('btnMap').onclick = () => { S.mapOn = !S.mapOn; };
   $('btnWalk').onclick = toggleWalk;
   // 3D-only view: the small top-view map shows when asked for, and whenever balls must be placed by hand
+  // drag the map by its grip; the position is kept as fractions of the free space, so it survives resizes
+  const mapGrip = $('mapGrip'); let mapDrag = null;
+  const MAP_TOP = 36;                         // stay below the 3D view's top bar (walk / map buttons)
+  let mapPos = null; try { mapPos = JSON.parse(localStorage.getItem('qball.mapPos') || 'null'); } catch (e) { /* ignore */ }
+  function placeMap() {
+    if (!mapPos || !S.mapShown) { stageEl.classList.remove('mapmoved'); return; }
+    const sr = stageEl.getBoundingClientRect(), mr = $('pane2d').getBoundingClientRect();
+    const freeX = Math.max(0, sr.width - mr.width - 8), freeY = Math.max(0, sr.height - mr.height - MAP_TOP - 4);
+    stageEl.style.setProperty('--map-x', (4 + mapPos.fx * freeX).toFixed(0) + 'px');
+    stageEl.style.setProperty('--map-y', (MAP_TOP + mapPos.fy * freeY).toFixed(0) + 'px');
+    stageEl.classList.add('mapmoved');
+  }
+  mapGrip.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault(); ev.stopPropagation();
+    const mr = $('pane2d').getBoundingClientRect();
+    mapDrag = { dx: ev.clientX - mr.left, dy: ev.clientY - mr.top };
+    mapGrip.setPointerCapture(ev.pointerId);
+  });
+  mapGrip.addEventListener('pointermove', (ev) => {
+    if (!mapDrag) return;
+    const sr = stageEl.getBoundingClientRect(), mr = $('pane2d').getBoundingClientRect();
+    const freeX = Math.max(1, sr.width - mr.width - 8), freeY = Math.max(1, sr.height - mr.height - MAP_TOP - 4);
+    const x = ev.clientX - sr.left - mapDrag.dx - 4, y = ev.clientY - sr.top - mapDrag.dy - MAP_TOP;
+    mapPos = { fx: Math.min(1, Math.max(0, x / freeX)), fy: Math.min(1, Math.max(0, y / freeY)) };
+    placeMap();
+  });
+  const endMapDrag = () => { if (!mapDrag) return; mapDrag = null; try { localStorage.setItem('qball.mapPos', JSON.stringify(mapPos)); } catch (e) { /* ignore */ } };
+  mapGrip.addEventListener('pointerup', endMapDrag);
+  mapGrip.addEventListener('pointercancel', endMapDrag);
+  mapGrip.addEventListener('dblclick', (ev) => { ev.stopPropagation(); mapPos = null; try { localStorage.removeItem('qball.mapPos'); } catch (e) { /* ignore */ } placeMap(); });
+  window.addEventListener('resize', () => placeMap());
+
   function updateMap() {
     const walking = !!(view3d && view3d.walk);
     const want = S.view === '3d' && (S.mapOn || walking || !!S.ballInHand || (placeMode() && S.arrange));
@@ -1218,63 +1584,114 @@
       const [aw, ah] = ext(renderer.margin);
       $('pane2d').style.aspectRatio = `${aw.toFixed(3)} / ${ah.toFixed(3)}`;
       $('mapHint').textContent = walking
-        ? 'drag the blue dot (or click where to go) · drag the 3D view to look around · double-click: back to your shot'
+        ? 'drag the dot to walk · drag the cone or the ⌖, or double-click in the 3D view, to choose what to look at · double-click the map: back to your shot'
         : 'click the map to walk · double-click: back to your shot';
       const vh = document.querySelector('#pane3d .vhint');
       if (vh) { if (!vh.dataset.shot) vh.dataset.shot = vh.textContent;
-        vh.textContent = walking ? 'walking · drag ↔ to turn, ↕ to look up/down · wheel: bend down · 🚶 again: back to your shot' : vh.dataset.shot; }
+        vh.textContent = walking ? 'walking · double-click a ball or spot here to look at it · move with the dot on the map, turn with the cone · wheel / pinch: bend down · 🚶 again: back to your shot' : vh.dataset.shot; }
       changed = true;
     }
-    if (changed) onResize();
+    if (changed) { onResize(); placeMap(); }
   }
 
   // 3D scene input: drag left/right = aim (no hover aiming); wheel = zoom (in: closer and lower, out: standing up)
   const cv3 = $('cueView'); let drag3 = null;
+  const touches3 = new Map(); let pinch = null;          // two fingers on the 3D view: pinch to zoom
+  const pinchDist = () => { const [a, b] = [...touches3.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   cv3.addEventListener('pointerdown', (ev) => {
-    if (ev.button !== 0 || !cue.onTable || (S.phase !== 'aim' && !(view3d && view3d.walk))) return;
+    if (realTouch(ev)) {
+      touches3.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (touches3.size === 2 && view3d) {
+        if (drag3 && !view3d.walk) S.aim = drag3.aim;    // the first finger was not an aim after all
+        drag3 = null; cv3.classList.remove('dragging');
+        pinch = { d: pinchDist(), z: view3d.z };
+        cv3.setPointerCapture(ev.pointerId);
+        return;
+      }
+      if (touches3.size > 2) return;
+    }
+    if (ev.button !== 0 || !cue.onTable || S.phase !== 'aim' || (view3d && view3d.walk)) return;   // walking: no dragging here
     QB.Sound.init();
-    drag3 = { x: ev.clientX, lx: ev.clientX, ly: ev.clientY, aim: S.aim };
+    drag3 = { id: ev.pointerId, x: ev.clientX, lx: ev.clientX, ly: ev.clientY, aim: S.aim };
     cv3.setPointerCapture(ev.pointerId);
     cv3.classList.add('dragging');
   });
   cv3.addEventListener('pointermove', (ev) => {
-    if (!drag3 || (S.phase !== 'aim' && !view3d.walk)) return;
-    const k = (ev.shiftKey ? 0.01 : 0.03 + 0.09 * view3d.z) / DEG;   // rad per pixel; finer when zoomed in
-    if (view3d.walk) {                       // while walking, dragging looks around: ↔ turns, ↕ looks up/down
-      const kl = 0.25 / DEG;
-      view3d.look(-(ev.clientX - drag3.lx) * kl, -(ev.clientY - drag3.ly) * kl);
-      drag3.lx = ev.clientX; drag3.ly = ev.clientY;
+    if (touches3.has(ev.pointerId)) touches3.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (pinch && touches3.size >= 2) {
+      const zRaw = pinch.z - (pinchDist() - pinch.d) * 0.004;
+      view3d.z = Math.min(1, Math.max(0, zRaw));
+      if (zRaw > 1.3 && !view3d.walk) startWalking();       // pinched out past standing: start walking
       return;
     }
-    S.aim = normAng(drag3.aim - (ev.clientX - drag3.x) * k);
+    if (!drag3 || drag3.id !== ev.pointerId || S.phase !== 'aim' || view3d.walk) return;
+    const k = (ev.shiftKey ? 0.01 : 0.03 + 0.09 * view3d.z) / DEG;   // rad per pixel; finer when zoomed in
+    S.aim = normAng(drag3.aim + (ev.clientX - drag3.x) * k);   // grab the table: it moves with the pointer
   });
-  const end3 = () => { drag3 = null; cv3.classList.remove('dragging'); };
+  const end3 = (ev) => {
+    touches3.delete(ev.pointerId); if (touches3.size < 2) pinch = null;
+    if (drag3 && drag3.id === ev.pointerId) { drag3 = null; cv3.classList.remove('dragging'); }
+  };
   cv3.addEventListener('pointerup', end3);
   cv3.addEventListener('pointercancel', end3);
-  cv3.addEventListener('wheel', (ev) => { if (view3d) { view3d.zoom(ev.deltaY); ev.preventDefault(); } }, { passive: false });
+  let zoomOutPush = 0, zoomOutT = 0;
+  // double-click (double-tap) in the 3D view: look at that spot / ball. While walking it becomes the fixed point;
+  // from the shot it stands you up into walk mode (3D-only view) looking at it.
+  function stareAt(clientX, clientY) {
+    if (!view3d) return;
+    const hit = view3d.pick(clientX, clientY, world.balls);
+    if (!hit) return;
+    if (!view3d.walk) { if (S.view !== '3d' || S.phase !== 'aim') return; startWalking(); if (!view3d.walk) return; }
+    view3d.setFocus(hit.x, hit.y, hit.z);
+    setStatus(hit.ball ? `Looking at the ${hit.ball.num === 0 ? 'cue ball' : hit.ball.num + '-ball'} — you keep facing it as you walk.` : 'Looking at that spot — you keep facing it as you walk.');
+  }
+  cv3.addEventListener('dblclick', (ev) => { if (!realTouch(ev)) stareAt(ev.clientX, ev.clientY); });
+  let lastTap3 = null;
+  cv3.addEventListener('pointerup', (ev) => {
+    if (!realTouch(ev)) return;
+    const now = performance.now();
+    if (lastTap3 && now - lastTap3.t < 350 && Math.hypot(ev.clientX - lastTap3.x, ev.clientY - lastTap3.y) < 25) { lastTap3 = null; stareAt(ev.clientX, ev.clientY); }
+    else lastTap3 = { t: now, x: ev.clientX, y: ev.clientY };
+  });
 
-  // the little cue on the side of the 3D view: drag it down to pull back, release to shoot
-  const pc = $('powerCue'); let pcDrag = null;
-  pc.addEventListener('pointerdown', (ev) => {
-    if (ev.button !== 0 || S.phase !== 'aim' || !cue.onTable) return;
-    QB.Sound.init();
-    returnToShot();                          // picking up the cue walks you back to your shot
-    pcDrag = { y: ev.clientY }; S.phase = 'pull'; S.pull = 0;
-    pc.setPointerCapture(ev.pointerId);
-  });
-  pc.addEventListener('pointermove', (ev) => {
-    if (!pcDrag || S.phase !== 'pull') return;
-    const h = pc.getBoundingClientRect().height * 0.62;          // full pull = 62% of the widget height
-    S.pull = Math.max(0, Math.min(C.MAX_PULL, (ev.clientY - pcDrag.y) / h * C.MAX_PULL));
-  });
-  const endPc = (cancel) => {
+  cv3.addEventListener('wheel', (ev) => {
+    if (!view3d) return;
+    ev.preventDefault();
+    const atTop = view3d.z >= 1 - 1e-9;
+    view3d.zoom(ev.deltaY);
+    // keep zooming out once standing -> start walking (3D-only view)
+    const now = performance.now();
+    if (atTop && ev.deltaY > 0 && !view3d.walk && S.view === '3d') {
+      zoomOutPush = (now - zoomOutT < 400 ? zoomOutPush : 0) + ev.deltaY; zoomOutT = now;
+      if (zoomOutPush > 250) { zoomOutPush = 0; startWalking(); }
+    } else zoomOutPush = 0;
+  }, { passive: false });
+
+  // the little cue on the side of the 3D view (and of the 2D view on touch screens): drag it down to pull back, release to shoot
+  const powerCues = [$('powerCue'), $('powerCue2')]; let pcDrag = null;
+  for (const pc of powerCues) {
+    pc.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0 || S.phase !== 'aim' || !cue.onTable || pcDrag) return;
+      QB.Sound.init();
+      returnToShot();                          // picking up the cue walks you back to your shot
+      pcDrag = { y: ev.clientY, el: pc, id: ev.pointerId }; S.phase = 'pull'; S.pull = 0;
+      pc.setPointerCapture(ev.pointerId);
+    });
+    pc.addEventListener('pointermove', (ev) => {
+      if (!pcDrag || pcDrag.id !== ev.pointerId || S.phase !== 'pull') return;
+      const h = pc.getBoundingClientRect().height * 0.62;          // full pull = 62% of the widget height
+      S.pull = Math.max(0, Math.min(C.MAX_PULL, (ev.clientY - pcDrag.y) / h * C.MAX_PULL));
+    });
+    pc.addEventListener('pointerup', (ev) => { if (pcDrag && pcDrag.id === ev.pointerId) endPc(false); });
+    pc.addEventListener('pointercancel', (ev) => { if (pcDrag && pcDrag.id === ev.pointerId) endPc(true); });
+  }
+  function endPc(cancel) {
     if (!pcDrag) return; pcDrag = null;
     if (S.phase !== 'pull') return;
     if (!cancel && S.pull > 0.004) beginStrike(speedFromPull(S.pull)); else { S.phase = 'aim'; S.pull = 0; }
-  };
-  pc.addEventListener('pointerup', () => endPc(false));
-  pc.addEventListener('pointercancel', () => endPc(true));
-  function drawPowerCue(pb) {
+  }
+  function drawPowerCue(pb) { for (const pc of powerCues) drawPowerCueOn(pc, pb); }
+  function drawPowerCueOn(pc, pb) {
     const dpr = window.devicePixelRatio || 1, W = Math.round(pc.clientWidth * dpr), H = Math.round(pc.clientHeight * dpr);
     if (!W || !H) return;
     if (pc.width !== W || pc.height !== H) { pc.width = W; pc.height = H; }
@@ -1313,5 +1730,5 @@
   requestAnimationFrame(frame);
 
   // expose for console debugging / automated tests
-  window.qb = { world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot };
+  window.qb = { railDist: (x, y, a) => noseDist(x, y, -Math.cos(a), -Math.sin(a)), eff: () => computeEffTip(), world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot };
 })();

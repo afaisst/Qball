@@ -31,9 +31,22 @@ window.QB = window.QB || {};
     // ---------------- scene construction ----------------
     buildTable() {
       const T = this.table, c = C.CUSHION_W, rw = C.RAIL_W, S = this.scene;
-      const clothMat = new THREE.MeshStandardMaterial({ color: 0x1b7a4b, roughness: 0.95 });
-      const cushMat = new THREE.MeshStandardMaterial({ color: 0x136640, roughness: 0.9 });
-      const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c2f15, roughness: 0.55 });
+      // procedural textures (js/textures.js): cloth with fibres, nap and light wear; felt cushions; grained wood
+      const tex = (cv, rx, ry) => {
+        const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+        if (rx) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); }
+        return t;
+      };
+      // the cloth has real holes at the pockets (cut out of its texture's alpha), so you can see into the pocket
+      const Lc = C.TABLE_L + 2 * c, Wc = C.TABLE_W + 2 * c, src = QB.Tex.cloth(T, Lc, Wc);
+      const holed = document.createElement('canvas'); holed.width = src.width; holed.height = src.height;
+      const hg = holed.getContext('2d'); hg.drawImage(src, 0, 0); hg.globalCompositeOperation = 'destination-out';
+      for (const p of T.pockets) {
+        hg.beginPath(); hg.arc((p.x + Lc / 2) / Lc * src.width, (Wc / 2 - p.y) / Wc * src.height, p.r / Lc * src.width, 0, Math.PI * 2); hg.fill();
+      }
+      const clothMat = new THREE.MeshStandardMaterial({ map: tex(holed), roughness: 0.95, alphaTest: 0.5 });
+      const cushMat = new THREE.MeshStandardMaterial({ map: tex(QB.Tex.feltTile('#136640'), 4, 4), roughness: 0.92 });  // UV in metres: 25 cm tiles
+      const woodMat = new THREE.MeshPhysicalMaterial({ map: tex(QB.Tex.wood(), 1, 4), roughness: 0.45, clearcoat: 0.45, clearcoatRoughness: 0.3 }); // 1 m × 25 cm
       const darkMat = new THREE.MeshStandardMaterial({ color: 0x120a05, roughness: 0.9 });
       const black = new THREE.MeshBasicMaterial({ color: 0x030303 });
 
@@ -41,12 +54,15 @@ window.QB = window.QB || {};
       const cloth = new THREE.Mesh(new THREE.PlaneGeometry(C.TABLE_L + 2 * c, C.TABLE_W + 2 * c), clothMat);
       cloth.receiveShadow = true; S.add(cloth);
 
-      // pocket drop holes on the cloth + a short black liner below
+      // pockets: a dark cup (straight liner + bottom) below the hole in the cloth; dropped balls end up in here
+      // (7 cm deep: a pocketed ball sits with its top just below the cloth, where you can see it)
+      const linerMat = new THREE.MeshStandardMaterial({ color: 0x060606, roughness: 1, side: THREE.BackSide });
+      const bottomMat = new THREE.MeshStandardMaterial({ color: 0x040404, roughness: 1 });
       for (const p of T.pockets) {
-        const d = new THREE.Mesh(new THREE.CircleGeometry(p.r, 40), black);
-        d.position.set(p.x, p.y, 0.0006); S.add(d);
-        const liner = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r * 0.9, 0.12, 40, 1, true), new THREE.MeshBasicMaterial({ color: 0x050505, side: THREE.BackSide }));
-        liner.rotation.x = Math.PI / 2; liner.position.set(p.x, p.y, -0.06); S.add(liner);
+        const liner = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r + 0.02, 0.07, 40, 1, true), linerMat);   // the bag widens a little
+        liner.rotation.x = Math.PI / 2; liner.position.set(p.x, p.y, -0.035); liner.receiveShadow = true; S.add(liner);
+        const bottom = new THREE.Mesh(new THREE.CircleGeometry(p.r + 0.02, 40), bottomMat);
+        bottom.position.set(p.x, p.y, -0.069); bottom.receiveShadow = true; S.add(bottom);
       }
 
       // cushions: extruded cushion polygons
@@ -58,7 +74,10 @@ window.QB = window.QB || {};
 
       // rails: outer rectangle minus (cushion back line rectangle ∪ pocket circles)
       const X1 = T.L2 + c + rw, Y1 = T.W2 + c + rw, X0 = T.L2 + c, Y0 = T.W2 + c;
-      const outer = new THREE.Shape([new THREE.Vector2(-X1, -Y1), new THREE.Vector2(X1, -Y1), new THREE.Vector2(X1, Y1), new THREE.Vector2(-X1, Y1)]);
+      // outer edge subdivided (so the cap triangles stay local and the wood grain can follow each rail)
+      const outerPts = [], sub = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 0.05); for (let i = 0; i < n; i++) outerPts.push(new THREE.Vector2(ax + (bx - ax) * i / n, ay + (by - ay) * i / n)); };
+      sub(-X1, -Y1, X1, -Y1); sub(X1, -Y1, X1, Y1); sub(X1, Y1, -X1, Y1); sub(-X1, Y1, -X1, -Y1);
+      const outer = new THREE.Shape(outerPts);
       const ring = [], step = 0.004;
       // Walk the rectangle counter-clockwise. A point that falls inside a pocket circle is pushed outward along the
       // edge normal onto the far side of the circle; between consecutive points on the same circle the arc is filled
@@ -88,11 +107,23 @@ window.QB = window.QB || {};
       // start between pockets so the closing segment never cuts across a pocket
       edge(-X0 / 2, -Y0, X0, -Y0, 0, -1); edge(X0, -Y0, X0, Y0, 1, 0); edge(X0, Y0, -X0, Y0, 0, 1); edge(-X0, Y0, -X0, -Y0, -1, 0); edge(-X0, -Y0, -X0 / 2, -Y0, 0, -1);
       outer.holes.push(new THREE.Path(ring));
-      const rail = new THREE.Mesh(new THREE.ExtrudeGeometry(outer, { depth: RAIL_H, bevelEnabled: false, curveSegments: 4 }), [woodMat, darkMat]);
+      // the rail body reaches 8 cm below the cloth (down to the apron, below the pocket cups)
+      const railGeo = new THREE.ExtrudeGeometry(outer, { depth: RAIL_H + 0.08, bevelEnabled: false, curveSegments: 4 });
+      railGeo.translate(0, 0, -0.08);
+      {   // wood grain along each rail: the caps' UVs are (x, y) in metres; swap to (y, x) on the head and foot rails
+        const pos = railGeo.attributes.position, uv = railGeo.attributes.uv, cap = railGeo.groups[0];
+        for (let t = cap.start; t < cap.start + cap.count; t += 3) {
+          let cx = 0, cy = 0; for (let k = 0; k < 3; k++) { cx += pos.getX(t + k) / 3; cy += pos.getY(t + k) / 3; }
+          const shortRail = (X1 - Math.abs(cx)) < (Y1 - Math.abs(cy));            // closer to an end rail (mitre line)
+          for (let k = 0; k < 3; k++) { const x = pos.getX(t + k), y = pos.getY(t + k); uv.setXY(t + k, shortRail ? y : x, shortRail ? x : y); }
+        }
+        uv.needsUpdate = true;
+      }
+      const rail = new THREE.Mesh(railGeo, [woodMat, darkMat]);
       rail.receiveShadow = true; S.add(rail);
       // floor-level apron below the rail so the table has some body
       const apron = new THREE.Mesh(new THREE.BoxGeometry(2 * X1, 2 * Y1, 0.18), darkMat);
-      apron.position.z = -0.0901; S.add(apron);
+      apron.position.z = -0.075 - 0.09; S.add(apron);     // top just below the pocket cups, so pocketed balls stay visible
 
       // diamonds
       const dm = new THREE.MeshBasicMaterial({ color: 0xe9dcc0 });
@@ -163,6 +194,21 @@ window.QB = window.QB || {};
       this.ghost = new THREE.Mesh(new THREE.SphereGeometry(R, 24, 16),
         new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.35 }));
       this.scene.add(this.ghost);
+      // where the tip will hit the cue ball: a small, thin red "+" (about 6 mm across, 0.5 mm lines) painted on a
+      // thin cap that sits on the ball surface
+      const TH = 0.12, cw = 512, ch = 128, cvm = document.createElement('canvas'); cvm.width = cw; cvm.height = ch;
+      const gm = cvm.getContext('2d');
+      gm.fillStyle = 'rgba(230,30,35,0.85)';
+      gm.fillRect(0, 0, cw, Math.max(1, 0.0003 / R / TH * ch));                              // joins the arms at the centre
+      for (let y = 0; y < (0.003 / R) / TH * ch; y++) {                                        // four arms, 3 mm each
+        const th = Math.max(0.004, (y + 0.5) / ch * TH), half = Math.min(cw / 8, ((0.00025 / R) / Math.sin(th)) / (2 * Math.PI) * cw);
+        for (const x0 of [0, cw / 4, cw / 2, 3 * cw / 4, cw]) gm.fillRect(x0 - half, y, 2 * half, 1);
+      }
+      const capTex = new THREE.CanvasTexture(cvm); capTex.encoding = THREE.sRGBEncoding;
+      this.tipMark = new THREE.Mesh(new THREE.SphereGeometry(R + 0.0003, 64, 16, 0, Math.PI * 2, 0, TH),
+        new THREE.MeshBasicMaterial({ map: capTex, transparent: true, depthWrite: false }));
+      this.tipMark.visible = false;
+      this.scene.add(this.tipMark);
     }
 
     // ---------------- balls ----------------
@@ -170,10 +216,11 @@ window.QB = window.QB || {};
       let m = this.balls.get(b.id);
       if (m && m.userData.num === b.num) return m;
       if (m) this.scene.remove(m);
-      const tex = new THREE.CanvasTexture(ballTexture(b.num));
-      tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+      const cv = ballTexture(b.num), tex = new THREE.CanvasTexture(cv.color), rough = new THREE.CanvasTexture(cv.rough);
+      tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4; rough.anisotropy = 4;
+      // satin rather than mirror-like; the roughness map makes chalk smudges and scuffs duller
       m = new THREE.Mesh(new THREE.SphereGeometry(R, 48, 32),
-        new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08 }));
+        new THREE.MeshPhysicalMaterial({ map: tex, roughness: 1, roughnessMap: rough, clearcoat: 0.35, clearcoatRoughness: 0.3 }));
       m.castShadow = true; m.userData.num = b.num;
       this.scene.add(m); this.balls.set(b.id, m);
       return m;
@@ -244,40 +291,87 @@ window.QB = window.QB || {};
       pts.sort((u, v) => u[0] - v[0]);
       return [...pts.map(q => q[1]), [x1, y1]];
     }
-    // stand up where you are (just outside the table, behind the shot), looking at `focus` (the cue ball)
-    startWalk(focus) {
+    // stand up where you are (just outside the table, behind the shot), facing the way you were looking
+    startWalk() {
       if (this.walk) return;
       const e = this.lastPose ? this.lastPose.eye : [-this.table.L2 - 0.5, 0, 1];
       const t = this.lastPose ? this.lastPose.target : [0, 0, 0];
       const [x, y] = this.clampWalk(e[0], e[1]);
-      this.walk = { x, y, yaw: Math.atan2(t[1] - e[1], t[0] - e[0]), pitch: -0.6, route: null,
-        focus: focus ? [focus.x, focus.y] : [0, 0] };
+      this.walk = { x, y, yaw: Math.atan2(t[1] - e[1], t[0] - e[0]), route: null, focus: null };
+      this.zShot = this.z;   // remember the zoom of the shot, to restore it when coming back
       this.z = 1;            // walking = standing up
     }
-    stopWalk() { this.walk = null; this.z = 1; }
+    stopWalk() { if (!this.walk) return; this.walk = null; this.z = this.zShot !== undefined ? this.zShot : 1; }
     walkEyeH() { return 0.12 + 0.75 * this.z; }      // standing (z = 1) ... bent down low (z = 0)
-    // the spot on the cloth the player is looking at now (null if looking above / off the table)
-    gazeSpot() {
-      const pose = this.walkPose(), e = pose.eye, t = pose.target, dz = t[2] - e[2];
-      if (dz >= -1e-6) return null;
-      const k = -e[2] / dz, gx = e[0] + (t[0] - e[0]) * k, gy = e[1] + (t[1] - e[1]) * k;
-      return (Math.abs(gx) < this.table.L2 + 0.05 && Math.abs(gy) < this.table.W2 + 0.05) ? [gx, gy] : null;
-    }
-    // move the player: glide = walk there (around the table), otherwise jump (dragging the dot on the map)
+    // Walk mode: the dot on the map moves you, the view cone on the map turns you, and zoom (wheel / pinch on
+    // the 3D view) bends you down. Turning with the cone fixes a point on the table (the middle of where the
+    // line of sight crosses it); while you walk you keep facing that point. Pointing off the table = no fixed
+    // point, and the view direction then stays the same while you walk.
     moveWalker(x, y, glide) {
       const w = this.walk; if (!w) return;
-      if (!w.moving) { w.focus = this.gazeSpot(); w.moving = true; }   // start of a move: keep eyes on what you look at
       [x, y] = this.clampWalk(x, y);
-      if (glide) w.route = this.walkRoute(w.x, w.y, x, y);
-      else { w.route = null; w.x = x; w.y = y; }
+      if (glide) w.route = this.walkRoute(w.x, w.y, x, y);     // click: walk there (around the table)
+      else { w.route = null; w.x = x; w.y = y; }               // drag the dot: follow it
     }
-    endMove() { if (this.walk) this.walk.moving = false; }
-    look(dYaw, dPitch) {
+    endMove() { /* nothing to reset */ }
+    setYaw(yaw) {
       const w = this.walk; if (!w) return;
-      w.focus = null;
-      w.yaw += dYaw; w.pitch = Math.max(-1.45, Math.min(0.35, w.pitch + dPitch));
+      w.yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+      w.focus = this.rayFocus(w.x, w.y, w.yaw);
     }
+    // the fixed point itself can be dragged on the map (e.g. onto a ball); it stays on the cloth
+    focusAt(x, y) { const w = this.walk; return !!(w && w.focus) && Math.hypot(x - w.focus[0], y - w.focus[1]) < 0.08; }
+    setFocus(x, y, z = 0) {
+      const w = this.walk; if (!w) return;
+      const T = this.table;
+      w.focus = [Math.max(-T.L2, Math.min(T.L2, x)), Math.max(-T.W2, Math.min(T.W2, y)), z];
+    }
+    // What is under the pointer in the 3D view? A ray from the camera through the pixel; the first thing it hits
+    // counts (a ball in front hides the one behind it). Returns {x, y, z, ball} or null (floor, sky, ...).
+    pick(clientX, clientY, balls) {
+      const rect = this.canvas.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+      const rc = this.raycaster || (this.raycaster = new THREE.Raycaster());
+      rc.setFromCamera(ndc, this.camera);
+      const T = this.table;
+      for (const hit of rc.intersectObjects(this.scene.children, true)) {
+        const o = hit.object;
+        if (!o.isMesh || !o.visible) continue;
+        let skip = false;
+        for (let q = o; q; q = q.parent) if (q === this.cue || q === this.ghost) skip = true;   // see-through helpers
+        if (skip || (o.material && o.material.transparent && o.material.opacity < 0.6)) continue;
+        for (const b of balls) {                                                            // a ball?
+          const m = this.balls.get(b.id);
+          if (m === o && b.onTable) return { x: b.x, y: b.y, z: R, ball: b };
+        }
+        const p = hit.point;
+        if (Math.abs(p.x) <= T.L2 + 0.25 && Math.abs(p.y) <= T.W2 + 0.25)                   // cloth, cushion or rail
+          return { x: Math.max(-T.L2, Math.min(T.L2, p.x)), y: Math.max(-T.W2, Math.min(T.W2, p.y)), z: 0, ball: null };
+        return null;                                                                          // floor etc.
+      }
+      return null;
+    }
+    rayFocus(x, y, yaw) {    // middle of the stretch where the ray from (x,y) crosses the cloth, or null
+      const T = this.table, dx = Math.cos(yaw), dy = Math.sin(yaw);
+      let t0 = -Infinity, t1 = Infinity;
+      for (const [p, d, lim] of [[x, dx, T.L2], [y, dy, T.W2]]) {
+        if (Math.abs(d) < 1e-9) { if (Math.abs(p) >= lim) return null; continue; }
+        let a = (-lim - p) / d, b = (lim - p) / d; if (a > b) [a, b] = [b, a];
+        t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+      }
+      t0 = Math.max(t0, 0.3);
+      if (t1 <= t0) return null;
+      const t = (t0 + t1) / 2;
+      return [x + dx * t, y + dy * t];
+    }
+    hfov() { const cam = this.camera; return 2 * Math.atan(Math.tan(cam.fov * Math.PI / 360) * cam.aspect); }
     walkerAt(x, y) { const w = this.walk; return !!w && Math.hypot(x - w.x, y - w.y) < 0.25; }
+    coneAt(x, y) {           // is (x,y) on the view cone drawn on the map?
+      const w = this.walk; if (!w) return false;
+      const d = Math.hypot(x - w.x, y - w.y); if (d < 0.1 || d > 1.9) return false;
+      let da = Math.atan2(y - w.y, x - w.x) - w.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
+      return Math.abs(da) < this.hfov() / 2 + 0.15;
+    }
     stepWalk(dt) {
       const w = this.walk; if (!w || !w.route) return;
       let v = 2.0 * dt;                                     // walking speed (m/s)
@@ -289,26 +383,41 @@ window.QB = window.QB || {};
       if (!w.route.length) w.route = null;
     }
     walkPose() {
+      // standing (z = 1): eye 0.87 m; zoomed in: leaning over the table (same lean with or without a fixed point)
       const w = this.walk, h = this.walkEyeH();
-      let lean = (1 - this.z) * 0.6;                         // free look: zooming in = leaning over the table
-      if (w.focus) {
-        // eyes on a spot: face it, and zooming in = leaning toward it and getting down to it
-        const fx = w.focus[0] - w.x, fy = w.focus[1] - w.y, dist = Math.max(1e-3, Math.hypot(fx, fy));
-        w.yaw = Math.atan2(fy, fx);
-        lean = Math.min((1 - this.z) * 0.6 * dist, Math.max(0, dist - 0.35));
-        w.pitch = -Math.atan2(h, Math.max(0.05, dist - lean));
+      let lean = (1 - this.z) * 0.6;
+      if (w.focus) {         // keep facing the fixed point and look right at it
+        const fx = w.focus[0] - w.x, fy = w.focus[1] - w.y, dist = Math.hypot(fx, fy);
+        if (dist > 1e-3) w.yaw = Math.atan2(fy, fx);
+        lean = Math.min(lean, Math.max(0, dist - 0.35));
+        const dx = Math.cos(w.yaw), dy = Math.sin(w.yaw);
+        return { eye: [w.x + dx * lean, w.y + dy * lean, h], target: [w.focus[0], w.focus[1], w.focus[2] || 0] };
       }
-      const dx = Math.cos(w.yaw), dy = Math.sin(w.yaw), cp = Math.cos(w.pitch), sp = Math.sin(w.pitch);
-      const ex = w.x + dx * lean, ey = w.y + dy * lean;
-      return { eye: [ex, ey, h], target: [ex + dx * cp, ey + dy * cp, h + sp] };
+      const ahead = 0.55 + 1.0 * this.z;   // no fixed point: look at the cloth ahead
+      const dx = Math.cos(w.yaw), dy = Math.sin(w.yaw), ex = w.x + dx * lean, ey = w.y + dy * lean;
+      return { eye: [ex, ey, h], target: [ex + dx * ahead, ey + dy * ahead, 0] };
+    }
+    // the cue held by the walking player: on the line of sight, butt at the hip, tip forward and a little down
+    heldCue() {
+      const w = this.walk, h = this.walkEyeH(), lean = (1 - this.z) * 0.6;
+      const dx = Math.cos(w.yaw), dy = Math.sin(w.yaw), rx = dy, ry = -dx;           // forward, right
+      const bx = w.x + dx * (lean - 0.15) + rx * 0, by = w.y + dy * (lean - 0.15) + ry * 0, bz = Math.max(0.06, h - 0.6);
+      const tz = Math.max(0.04, bz - 0.22), horiz = Math.sqrt(Math.max(0, C.CUE_LEN * C.CUE_LEN - (bz - tz) ** 2));
+      const tip = [bx + dx * horiz, by + dy * horiz, tz];
+      const L = C.CUE_LEN, toButt = [(bx - tip[0]) / L, (by - tip[1]) / L, (bz - tz) / L];
+      return { tip, toButt };
     }
     walkerOnMap() {
       if (!this.walk) return null;
       const { X, Y, room } = this.walkArea();
-      const cam = this.camera, hfov = 2 * Math.atan(Math.tan(cam.fov * Math.PI / 360) * cam.aspect);
-      return { x: this.walk.x, y: this.walk.y, yaw: this.walk.yaw, hfov, area: { X: X + room, Y: Y + room } };
+      return { x: this.walk.x, y: this.walk.y, yaw: this.walk.yaw, focus: this.walk.focus, hfov: this.hfov(), area: { X: X + room, Y: Y + room } };
     }
 
+    // high view from behind the shot line that shows the whole table (farther back in a narrow window)
+    overviewPose(aim) {
+      const dx = Math.cos(aim), dy = Math.sin(aim), k = Math.max(1, 1.45 / (this.camera.aspect || 1.6));
+      return { eye: [-dx * 2.6 * k, -dy * 2.6 * k, 2.2 * k], target: [-dx * 0.2, -dy * 0.2, 0] };
+    }
     freeze(pose) { this.frozen = pose; }
     unfreeze() { this.frozen = null; }
     poseFor(cb, aim, elev = 0) {
@@ -336,12 +445,21 @@ window.QB = window.QB || {};
       const now = performance.now(), dt = Math.min(0.05, (now - (this._t || now)) / 1000); this._t = now;
       if (this.walk) this.stepWalk(dt);
       let pose = this.walk ? this.walkPose() : this.frozen || (cue.onTable ? this.poseFor(cue, st.aimAngle, st.elev || 0) : this.lastPose);
+      // after the shot: pull back to an overview of the whole table (from the shooter's side) while the balls roll
+      const over = !!st.overview && !this.walk;
+      if (over) pose = this.overviewPose(st.aimAngle);
+      if (this._wasOver !== undefined && over !== this._wasOver && this.lastPose) this.trans = { from: this.lastPose, t: 0, dur: over ? 0.9 : 0.6 };
+      this._wasOver = over;
       // standing up / going back to the shot: blend the camera over ~0.4 s instead of jumping
       const walking = !!this.walk;
       if (this._wasWalking !== undefined && walking !== this._wasWalking && this.lastPose) this.trans = { from: this.lastPose, t: 0 };
       this._wasWalking = walking;
+      if (pose && walking && this.lastPose && !this.trans) {
+        const k = 1 - Math.exp(-dt * 14), L = this.lastPose, mix = (a, b) => a.map((v, i) => v + (b[i] - v) * k);
+        pose = { eye: mix(L.eye, pose.eye), target: mix(L.target, pose.target) };
+      }
       if (pose && this.trans) {
-        this.trans.t += dt / 0.4;
+        this.trans.t += dt / (this.trans.dur || 0.4);
         if (this.trans.t >= 1) this.trans = null;
         else {
           const u = this.trans.t * this.trans.t * (3 - 2 * this.trans.t), f = this.trans.from;
@@ -383,6 +501,21 @@ window.QB = window.QB || {};
       });
       // balls
       const m4 = new THREE.Matrix4();
+      // balls dropping into a pocket get their own copy of the mesh (the real ball may already be re-spotted)
+      this.dropMeshes = this.dropMeshes || new Map();
+      const live = new Set(st.drops || []);
+      for (const [d, dm] of this.dropMeshes) if (!live.has(d)) { this.scene.remove(dm); this.dropMeshes.delete(d); }
+      for (const d of live) {
+        let dm = this.dropMeshes.get(d);
+        if (!dm) {
+          const src = this.ballMesh(d.b);
+          dm = new THREE.Mesh(src.geometry, src.material); dm.castShadow = true; dm.quaternion.copy(src.quaternion);
+          this.scene.add(dm); this.dropMeshes.set(d, dm);
+        }
+        dm.position.set(d.x, d.y, d.z);
+        const sp = Math.hypot(d.vx, d.vy);          // rolling as it goes
+        if (sp > 1e-4) dm.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(-d.vy / sp, d.vx / sp, 0), sp * dt / R));
+      }
       for (const b of st.balls) {
         const m = this.ballMesh(b);
         m.visible = b.onTable;
@@ -396,8 +529,18 @@ window.QB = window.QB || {};
         m.quaternion.setFromRotationMatrix(m4);
       }
       // cue stick
-      this.cue.visible = !!st.showCue && cue.onTable && !this.walk;   // no cue in hand while walking
-      if (this.cue.visible) {
+      // while walking the cue "walks with you": carried see-through at your side, pointing the way you look
+      this.cue.visible = !!st.showCue && cue.onTable;
+      const ghost = !!this.walk;
+      if (this.cue.userData.ghost !== ghost) {
+        this.cue.userData.ghost = ghost;
+        this.cue.traverse((o) => { if (o.material) { o.material.transparent = ghost; o.material.opacity = ghost ? 0.35 : 1; o.material.depthWrite = !ghost; o.castShadow = !ghost; o.material.needsUpdate = true; } });
+      }
+      if (this.cue.visible && this.walk) {
+        const W = this.heldCue();
+        this.cue.position.set(...W.tip);
+        this.cue.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...W.toButt));
+      } else if (this.cue.visible) {
         const th = st.elev || 0, ce = Math.cos(th), se = Math.sin(th);
         const dx = Math.cos(st.aimAngle), dy = Math.sin(st.aimAngle);
         let tx = st.tipX, ty = st.tipY; const rr = Math.hypot(tx, ty);
@@ -408,7 +551,18 @@ window.QB = window.QB || {};
         const P = [0, 1, 2].map(i => a * rv[i] + b * uv[i] - c * e[i] - gap * e[i]);
         this.cue.position.set(cue.x + P[0], cue.y + P[1], R + P[2]);
         this.cue.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-e[0], -e[1], -e[2]));
+        // tip contact point on the ball surface: n = (a·r + b·u − c·e) / R; the cap's axis points along n,
+        // with the cross arms along the cue's right / up directions
+        if (st.showTipMark) {
+          const n = new THREE.Vector3(...[0, 1, 2].map(i => a * rv[i] + b * uv[i] - c * e[i])).normalize();
+          const right = new THREE.Vector3(...rv); right.addScaledVector(n, -right.dot(n)).normalize();
+          const zAx = new THREE.Vector3().crossVectors(right, n);
+          this.tipMark.setRotationFromMatrix(new THREE.Matrix4().makeBasis(right, n, zAx));
+          this.tipMark.position.set(cue.x, cue.y, R);
+          this.tipMark.visible = true;
+        }
       }
+      if (!(this.cue.visible && !this.walk && st.showTipMark)) this.tipMark.visible = false;
       // aiming aids
       const show = !!st.showAids && st.aim;
       for (const o of [this.aimLine, this.obLine, this.cbLine, this.tanLine, this.ghost]) o.visible = false;
@@ -419,7 +573,7 @@ window.QB = window.QB || {};
         if (A.hit && A.hit.type === 'ball') {
           setLine(this.obLine, [A.ob.x, A.ob.y, z, A.obEnd.x, A.obEnd.y, z]);
           if (A.tangent && st.showTangent) setLine(this.tanLine, [A.gx, A.gy, z, A.gx + A.tangent.x * 0.3, A.gy + A.tangent.y * 0.3, z]);
-        } else if (A.bounce) {
+        } else if (A.bounce && st.showBounce !== false) {    // cue ball off the cushion (part of the cue-ball path)
           setLine(this.obLine, [A.gx, A.gy, z, A.bounce.x, A.bounce.y, z]);
         }
         if (st.cbPath) {
@@ -427,7 +581,49 @@ window.QB = window.QB || {};
           setLine(this.cbLine, pts);
         }
       }
-      this.renderer.render(this.scene, this.camera);
+      if (st.drawMain !== false) this.renderer.render(this.scene, this.camera);
+      if (st.eclipse) this.renderEclipse(st);
+    }
+
+    // ---- "eclipse" inset: the exact view along the cue line --------------------------------------------------
+    // An orthographic camera sits at the cue-ball centre, at ball height, looking along the line to the ghost ball.
+    // The cue ball itself is hidden and drawn as an outline instead, so you see how much of the object ball it
+    // covers (the ball fraction): full ball, ¾, ½, ¼ ... A thin cut shows a sliver of overlap.
+    renderEclipse(st) {
+      const el = st.eclipse, A = st.aim, cue = st.cue;
+      if (!this.ecl) {
+        const r = new THREE.WebGLRenderer({ canvas: el.gl, antialias: true });
+        r.outputEncoding = THREE.sRGBEncoding; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.ecl = { r, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0.001, 6) };
+        this.ecl.cam.up.set(0, 0, 1);
+      }
+      const { r, cam } = this.ecl, rect = el.gl.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      const W = Math.max(1, Math.round(rect.width * dpr)), H = Math.max(1, Math.round(rect.height * dpr));
+      if (el.gl.width !== W || el.gl.height !== H) { r.setPixelRatio(1); r.setSize(W, H, false); el.ov.width = W; el.ov.height = H; }
+      const g = el.ov.getContext('2d'); g.clearRect(0, 0, W, H);
+      const ok = A && A.hit && A.hit.type === 'ball' && cue.onTable;
+      el.box.classList.toggle('empty', !ok);
+      if (!ok) { r.clear(); el.label.textContent = 'no ball on the aim line'; return; }
+      const dx = A.gx - cue.x, dy = A.gy - cue.y, dl = Math.hypot(dx, dy) || 1, ux = dx / dl, uy = dy / dl;
+      const halfH = 2.1 * R, halfW = halfH * W / H;
+      cam.left = -halfW; cam.right = halfW; cam.top = halfH; cam.bottom = -halfH; cam.updateProjectionMatrix();
+      cam.position.set(cue.x, cue.y, R); cam.lookAt(cue.x + ux, cue.y + uy, R);
+      // hide what would block or clutter the view
+      const cbMesh = this.balls.get(cue.id);
+      const hide = [cbMesh, this.cue, this.ghost, this.tipMark, this.aimLine, this.obLine, this.cbLine, this.tanLine].filter(Boolean);
+      const was = hide.map(o => o.visible); hide.forEach(o => { o.visible = false; });
+      r.render(this.scene, cam);
+      hide.forEach((o, i) => { o.visible = was[i]; });
+      // cue-ball silhouette (radius R, centred on the line) and the overlap as a number
+      const k = H / (2 * halfH), cx = W / 2, cy = H / 2, rad = R * k;
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.arc(cx, cy, rad, 0, Math.PI * 2); g.fill();
+      g.setLineDash([5 * dpr, 4 * dpr]); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 1.5 * dpr;
+      g.beginPath(); g.arc(cx, cy, rad, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1 * dpr;
+      g.beginPath(); g.moveTo(cx, cy - rad * 1.25); g.lineTo(cx, cy + rad * 1.25); g.stroke();
+      const ob = A.ob, off = Math.abs((ob.x - cue.x) * -uy + (ob.y - cue.y) * ux);   // OB centre's distance from the line
+      const frac = Math.max(0, 1 - off / (2 * R));
+      el.label.textContent = frac > 0.995 ? 'full ball' : frac < 0.005 ? 'no overlap' : `${Math.round(frac * 100)}% ball (cut ${Math.abs(A.cutDeg).toFixed(0)}°)`;
     }
   }
 
@@ -472,7 +668,61 @@ window.QB = window.QB || {};
       g.fillStyle = col; g.fillRect(0, 0, W, H);
       disc(0.5, 0.45, '#f6f4ec', String(num)); disc(0, 0.45, '#f6f4ec', String(num));
     }
-    return cv;
+    return wear(cv, num);
+  }
+
+  // Light wear, different for every ball (but the same each time): faint blue chalk smudges (more on the cue
+  // ball), tiny scuffs and specks, and a slightly uneven surface. Also returns a roughness map in which the
+  // marks are duller than the polished surface. Everything is kept very faint.
+  function wear(cv, num) {
+    const W = cv.width, H = cv.height, g = cv.getContext('2d');
+    const rc = document.createElement('canvas'); rc.width = W / 4; rc.height = H / 4;
+    const r = rc.getContext('2d'), k = 1 / 4;
+    r.fillStyle = 'rgb(105,105,105)'; r.fillRect(0, 0, rc.width, rc.height);          // base roughness ≈ 0.41
+    let seed = 1234567 + num * 7919;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    // round-looking spot on the sphere: stretch it in u toward the poles (equirectangular map)
+    const spot = (ctx, x, y, ang, s, fill) => {
+      const theta = Math.max(0.25, Math.sin(y / H * Math.PI)), ry = ang / Math.PI * H * s, rx = ry / theta;
+      for (const dx of [0, -W * s, W * s]) {
+        const gr = ctx.createRadialGradient(x * s + dx, y * s, 0, x * s + dx, y * s, ry);
+        gr.addColorStop(0, fill); gr.addColorStop(1, fill.replace(/[\d.]+\)$/, '0)'));
+        ctx.save(); ctx.translate(x * s + dx, y * s); ctx.scale(rx / ry, 1); ctx.translate(-(x * s + dx), -y * s);
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x * s + dx, y * s, ry, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+    };
+    // 1) slightly uneven surface
+    for (let i = 0; i < 260; i++) {
+      const x = rnd() * W, y = (0.05 + 0.9 * rnd()) * H, a = 0.03 + rnd() * 0.08;
+      spot(g, x, y, a, 1, rnd() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)');
+    }
+    // 2) chalk smudges (cue chalk is blue): several on the cue ball, a few on object balls
+    const nChalk = num === 0 ? 9 : 2 + Math.floor(rnd() * 3);
+    for (let i = 0; i < nChalk; i++) {
+      const x = rnd() * W, y = (0.12 + 0.76 * rnd()) * H, a = 0.035 + rnd() * (num === 0 ? 0.06 : 0.045);
+      const alpha = (num === 0 ? 0.62 : 0.46) * (0.6 + 0.4 * rnd());
+      spot(g, x, y, a, 1, `rgba(60,110,200,${alpha.toFixed(3)})`);
+      for (let j = 0; j < 3; j++) spot(g, x + (rnd() - 0.5) * a * H * 0.8, y + (rnd() - 0.5) * a * H * 0.8, a * 0.35, 1, `rgba(45,95,190,${(alpha * 0.9).toFixed(3)})`);
+      spot(r, x, y, a * 1.2, k, 'rgba(200,200,200,0.8)');                           // chalk is dull
+    }
+    // 3) scuffs: short faint curved scratches, and specks
+    g.lineCap = 'round';
+    for (let i = 0; i < 26; i++) {
+      const x = rnd() * W, y = (0.1 + 0.8 * rnd()) * H, len = 6 + rnd() * 26, ang = rnd() * Math.PI, bend = (rnd() - 0.5) * 10;
+      const ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len * 0.6;
+      const light = rnd() < 0.6;
+      g.strokeStyle = light ? `rgba(255,255,255,${(0.22 + rnd() * 0.15).toFixed(3)})` : `rgba(40,40,40,${(0.18 + rnd() * 0.12).toFixed(3)})`;
+      g.lineWidth = 1.2 + rnd() * 1.4;
+      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo((x + ex) / 2 + bend, (y + ey) / 2 - bend, ex, ey); g.stroke();
+      r.strokeStyle = 'rgba(190,190,190,0.6)'; r.lineWidth = 1;
+      r.beginPath(); r.moveTo(x * k, y * k); r.lineTo(ex * k, ey * k); r.stroke();
+    }
+    for (let i = 0; i < 70; i++) {
+      const x = rnd() * W, y = (0.06 + 0.88 * rnd()) * H;
+      g.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.25)' : 'rgba(60,60,60,0.2)';
+      g.fillRect(x, y, 2, 2);
+    }
+    return { color: cv, rough: rc };
   }
 
   QB.CueView = CueView;
