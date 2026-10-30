@@ -43,7 +43,7 @@ QB.Tex = (function () {
     for (let i = 0; i < size * size; i++) {
       const n = rnd(), light = n > 0.5;
       d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = light ? 255 : 0;
-      d[i * 4 + 3] = Math.abs(n - 0.5) * 2 * 12;      // up to ~5% opacity: a light felt texture
+      d[i * 4 + 3] = Math.abs(n - 0.5) * 2 * 24;      // up to ~9% opacity: a clearly visible felt
     }
     g.putImageData(img, 0, 0);
     return (cache[key] = c);
@@ -61,8 +61,8 @@ QB.Tex = (function () {
       const y = W / 2 - (py + 0.5) * mpp;
       for (let px = 0; px < wPx; px++) {
         const x = -L / 2 + (px + 0.5) * mpp;
-        let n = (rnd() - 0.5) * 0.085;                                                 // fibres
-        n += mot(px / wPx * 24, py / hPx * 12) * 0.022;                                 // mottling (~10 cm)
+        let n = (rnd() - 0.5) * 0.13;                                                  // fibres
+        n += mot(px / wPx * 24, py / hPx * 12) * 0.03;                                  // mottling (~10 cm)
         n += nap(px / wPx * 6, py / hPx * 256) * 0.012;                                 // nap: faint streaks along the table
         // wear: the lane the cue ball travels on the break, the rack area, and the head spot
         if (x > hs.x - 0.1 && x < fs.x + 0.12) n += 0.022 * Math.exp(-(y * y) / (2 * 0.07 * 0.07));

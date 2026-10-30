@@ -1,0 +1,82 @@
+[
+  {
+    "id": "boecklin-toteninsel",
+    "artist": "Arnold Böcklin",
+    "title": "Isle of the Dead (first version)",
+    "year": "1880",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3AArnold_B%C3%B6cklin_-_Die_Toteninsel_I_(Basel%2C_Kunstmuseum).jpg"
+  },
+  {
+    "id": "anker-dorfschule",
+    "artist": "Albert Anker",
+    "title": "The Village School of 1848",
+    "year": "1896",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3AAnker_Die_Dorfschule_von_1848_1896.jpg"
+  },
+  {
+    "id": "hodler-thunersee",
+    "artist": "Ferdinand Hodler",
+    "title": "Lake Thun with Symmetrical Reflection",
+    "year": "1905",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3AHodler_-_Thunersee_mit_symmetrischer_Spiegelung_-_1905.jpg"
+  },
+  {
+    "id": "hodler-niesen",
+    "artist": "Ferdinand Hodler",
+    "title": "The Niesen",
+    "year": "1910",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3AHodler_-_Der_Niesen_-_1910.jpg"
+  },
+  {
+    "id": "vallotton-grasse",
+    "artist": "Félix Vallotton",
+    "title": "Sunset at Grasse",
+    "year": "1918",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3AF%C3%A9lix_Vallotton%2C_1918_-_Coucher_de_soleil_%C3%A0_Grasse.jpg"
+  },
+  {
+    "id": "klee-senecio",
+    "artist": "Paul Klee",
+    "title": "Senecio",
+    "year": "1922",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3APaul_Klee%2C_1922%2C_Senecio%2C_oil_on_gauze%2C_40.3_%C3%97_37.4_cm%2C_Kunstmuseum_Basel.jpg"
+  },
+  {
+    "id": "hodler-genfersee",
+    "artist": "Ferdinand Hodler",
+    "title": "Lake Geneva from Chexbres",
+    "year": "1905",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3AFerdinand_Hodler_-_Der_Genfersee_von_Chexbres_aus.jpg"
+  },
+  {
+    "id": "giacometti-maloja",
+    "artist": "Giovanni Giacometti",
+    "title": "Maloja in Winter",
+    "year": "before 1933",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File%3AGiovanni_Giacometti_Maloja_l'inverno.jpg"
+  },
+  {
+    "id": "oberhaensli-1",
+    "artist": "Rainer Oberhänsli",
+    "title": "Horizont",
+    "year": "",
+    "license": "© Rainer Oberhänsli — used with the artist's permission; not covered by this project's licence",
+    "source": "http://www.raineroberhaensli.ch/galerie.htm"
+  },
+  {
+    "id": "oberhaensli-2",
+    "artist": "Rainer Oberhänsli",
+    "title": "Horizont",
+    "year": "",
+    "license": "© Rainer Oberhänsli — used with the artist's permission; not covered by this project's licence",
+    "source": "http://www.raineroberhaensli.ch/galerie.htm"
+  }
+]

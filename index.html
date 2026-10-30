@@ -26,8 +26,11 @@
         <button data-view="3d" title="Cue view only (V cycles)">3D</button>
       </div>
     </div>
+    <label class="viewctl" title="Table size (the page reloads)"><span>Table</span>
+      <select id="selTable"><option value="9">9 ft</option><option value="8">8 ft</option><option value="7">7 ft</option></select></label>
     <span id="testBadge" class="badge" hidden>TEST MODE</span>
     <div id="status" class="status"></div>
+    <button id="btnSettings" class="hdrbtn" title="Aiming aids, 3D view and other settings">⚙ Settings</button>
     <button id="btnTouch" class="toggle" title="Touch mode: aim by dragging and shoot with the pull-down cue on the side (like on a tablet)">👆 Touch mode</button>
     <label class="chk small"><input type="checkbox" id="optSound" checked> Sound</label>
   </header>
@@ -122,20 +125,6 @@
         </div>
       </section>
 
-      <section>
-        <h2>Aiming aids</h2>
-        <label class="chk"><input type="checkbox" id="optAimLine" checked> Aim line &amp; object-ball path</label>
-        <label class="chk"><input type="checkbox" id="optGhost" checked> Ghost ball</label>
-        <label class="chk"><input type="checkbox" id="optTipMark" checked> Tip contact point on the cue ball (3D)</label>
-        <label class="chk"><input type="checkbox" id="optEclipse"> Eclipse view (along the cue line)</label>
-        <label class="chk"><input type="checkbox" id="optOverview" checked> 3D: overview of the table while the balls roll</label>
-        <label class="chk"><input type="checkbox" id="optCBPath" checked> Cue-ball path</label>
-        <div id="previewVal" class="note test-only" style="margin:-2px 0 4px 24px"></div>
-        <label class="chk"><input type="checkbox" id="optTangent" checked> Tangent line (90° rule)</label>
-        <label class="chk"><input type="checkbox" id="optSquirtLine"> Aim line includes squirt &amp; swerve</label>
-        <label class="chk"><input type="checkbox" id="optTrails"> Ball trails of the last shot</label>
-        <label class="chk"><input type="checkbox" id="optGrid"> Practice markings (diamond grid dots)</label>
-      </section>
 
       <div class="test-only">
         <section>
@@ -223,6 +212,32 @@
     </aside>
   </main>
   <a id="lnkTest" class="testlink" href="#" title="Physics test mode (T)">test mode</a>
+  <div id="settingsModal" hidden><div class="lbox">
+    <h2>Settings</h2>
+    <div class="sgrid">
+      <div>
+        <h3>Aiming aids</h3>
+        <label class="chk"><input type="checkbox" id="optAimLine" checked> Aim line &amp; object-ball path</label>
+        <label class="chk"><input type="checkbox" id="optGhost" checked> Ghost ball</label>
+        <label class="chk"><input type="checkbox" id="optCBPath" checked> Cue-ball path</label>
+        <div id="previewVal" class="note test-only" style="margin:-2px 0 4px 24px"></div>
+        <label class="chk"><input type="checkbox" id="optTangent" checked> Tangent line (90° rule)</label>
+        <label class="chk"><input type="checkbox" id="optSquirtLine"> Aim line includes squirt &amp; swerve</label>
+        <label class="chk"><input type="checkbox" id="optTrails"> Ball trails of the last shot</label>
+        <h3>Table</h3>
+        <label class="chk"><input type="checkbox" id="optGrid"> Practice markings (diamond grid dots)</label>
+      </div>
+      <div>
+        <h3>3D view</h3>
+        <label class="chk"><input type="checkbox" id="optTipMark" checked> Tip contact point on the cue ball</label>
+        <label class="chk"><input type="checkbox" id="optEclipse"> Eclipse view (along the cue line)</label>
+        <label class="chk"><input type="checkbox" id="optOverview" checked> Overview of the table while the balls roll</label>
+        <label class="chk"><input type="checkbox" id="optShadows" checked> Realistic shadows (three lamps)</label>
+        <div class="note" style="margin:-2px 0 4px 24px">Off: one steady light from above (faster on older devices).</div>
+      </div>
+    </div>
+    <div class="lbtns"><button id="btnSettingsDefaults">Defaults</button><button id="btnSettingsClose" class="primary">Done</button></div>
+  </div></div>
   <div id="lessonModal" hidden><div class="lbox"><h2 id="lmTitle"></h2><div id="lmBody"></div><div id="lmBtns" class="lbtns"></div></div></div>
 
   <script src="js/vendor/three.min.js"></script>
@@ -234,6 +249,7 @@
   <script src="js/setups.js"></script>
   <script src="js/lessons.js"></script>
   <script src="js/textures.js"></script>
+  <script src="js/art.js"></script>
   <script src="js/view3d.js"></script>
   <script src="js/main.js"></script>
 </body>

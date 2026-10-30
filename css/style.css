@@ -155,6 +155,7 @@ body.placing, body.placing * { cursor: grabbing !important; }
 /* ---------- view modes ---------- */
 .viewctl { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
 .viewctl .seg button { padding: 4px 10px; }
+#selTable { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; font: inherit; font-size: 12px; }
 #stage.only3d #pane3d { flex: 1 1 auto; border-top: 0; order: 1; }
 #stage.only3d #pane2d { display: none; }
 #stage.only3d.showmap #pane2d { display: block; position: absolute; left: 12px; bottom: 12px; width: min(34%, 420px); aspect-ratio: 2.96 / 1.69; height: auto;
@@ -184,17 +185,17 @@ button, label.chk { touch-action: manipulation; }
   color: #e6ebef; background: linear-gradient(transparent, rgba(0,0,0,0.75)); }
 #eclipse.empty #eclipseLabel { top: 0; bottom: 0; display: grid; place-items: center; color: var(--muted); background: none; }
 /* ---------- lessons ---------- */
-#lessonModal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(0,0,0,0.45); padding: 16px; }
-#lessonModal[hidden] { display: none; }
-#lessonModal .lbox { max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
+#lessonModal, #settingsModal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(0,0,0,0.45); padding: 16px; }
+#lessonModal[hidden], #settingsModal[hidden] { display: none; }
+#lessonModal .lbox, #settingsModal .lbox { max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
   border-radius: 14px; padding: 18px 20px 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); font-size: 14px; line-height: 1.5; }
-#lessonModal h2 { margin: 0 0 8px; font-size: 18px; }
+#lessonModal h2, #settingsModal h2 { margin: 0 0 8px; font-size: 18px; }
 #lessonModal ul { padding-left: 20px; margin: 6px 0; }
 #lessonModal p { margin: 8px 0; }
 #lessonModal .key { background: rgba(242,194,0,0.12); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; }
 #lessonModal table { border-collapse: collapse; margin: 6px 0; width: 100%; }
 #lessonModal td { padding: 3px 8px; border-bottom: 1px solid var(--line); }
-#lessonModal .lbtns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+#lessonModal .lbtns, #settingsModal .lbtns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
 .lsteps { display: flex; gap: 6px; margin: 6px 0 8px; }
 .lsteps span { flex: 1; text-align: center; font-size: 11px; padding: 3px 4px; border-radius: 6px; background: var(--panel2); color: var(--muted); }
 .lsteps span.on { background: var(--accent); color: #111; font-weight: 600; }
@@ -207,6 +208,12 @@ button, label.chk { touch-action: manipulation; }
 .lresults .b { color: var(--muted); }
 .lresults .todo { color: var(--muted); font-style: italic; }
 .lresults .ok { color: #7fd99a; }
+#settingsModal .lbox { max-width: 640px; }
+#settingsModal .sgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; }
+@media (max-width: 600px) { #settingsModal .sgrid { grid-template-columns: 1fr; } }
+#settingsModal h3 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+#settingsModal label.chk { margin: 5px 0; }
+.hdrbtn { padding: 3px 10px; font-size: 12px; white-space: nowrap; }
 /* tablet in portrait: table on top, panel below */
 @media (max-width: 900px) and (orientation: portrait) {
   main { flex-direction: column; }

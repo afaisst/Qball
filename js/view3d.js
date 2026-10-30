@@ -8,6 +8,77 @@ window.QB = window.QB || {};
   const RAIL_H = NOSE_H + 0.0005;            // rail cap flush with the cushion top (the cue must clear it)
   const WALK_ROOM = 1.0;                     // Walk mode: how far from the rails the player may walk (m)
 
+  // ---- one cushion: sweep the cross-section along its face (jaw, nose, jaw), with filleted corners ----
+  function cushionProfile() {
+    // (d, z): d = distance behind the nose line (into the cushion), z = height. Goes from the cloth up the face,
+    // round the nose, and back along the top to the rail.
+    const pts = [[0.012, 0], [0.0055, 0.016], [0.0012, NOSE_H - 0.006]];
+    const rc = 0.0045, cx = rc * 0.95, cz = RAIL_H - rc;              // rounded nose
+    for (let k = 0; k <= 8; k++) { const a = Math.PI * (1.05 - 0.55 * k / 8); pts.push([cx + rc * Math.cos(a), cz + rc * Math.sin(a)]); }
+    pts.push([0.02, RAIL_H], [C.CUSHION_W, RAIL_H]);
+    return pts;
+  }
+  function filletPolyline(pts, radii) {      // radii[i] for the inner corners
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = pts[i - 1], p = pts[i], b = pts[i + 1], rf = radii[i] || 0;
+      const u1 = norm2(p.x - a.x, p.y - a.y), u2 = norm2(b.x - p.x, b.y - p.y);
+      const th = Math.acos(Math.max(-1, Math.min(1, u1[0] * u2[0] + u1[1] * u2[1])));
+      if (rf <= 0 || th < 1e-3) { out.push(p); continue; }
+      const t = Math.min(rf * Math.tan(th / 2), 0.45 * Math.hypot(p.x - a.x, p.y - a.y), 0.45 * Math.hypot(b.x - p.x, b.y - p.y));
+      const s0 = { x: p.x - u1[0] * t, y: p.y - u1[1] * t }, s1 = { x: p.x + u2[0] * t, y: p.y + u2[1] * t };
+      const n = 8;                            // quadratic Bezier through the corner ≈ the fillet arc
+      for (let k = 0; k <= n; k++) { const q = k / n, w0 = (1 - q) * (1 - q), w1 = 2 * q * (1 - q), w2 = q * q;
+        out.push({ x: w0 * s0.x + w1 * p.x + w2 * s1.x, y: w0 * s0.y + w1 * p.y + w2 * s1.y }); }
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  }
+  function norm2(x, y) { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
+  function offsetPolyline(pts, d, inwardSign) {   // miter offset toward the cushion body
+    const segN = [];
+    for (let i = 0; i < pts.length - 1; i++) { const u = norm2(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); segN.push([-u[1] * inwardSign, u[0] * inwardSign]); }
+    return pts.map((p, i) => {
+      const n0 = segN[Math.max(0, i - 1)], n1 = segN[Math.min(segN.length - 1, i)];
+      const mx = n0[0] + n1[0], my = n0[1] + n1[1], k = 1 + n0[0] * n1[0] + n0[1] * n1[1];
+      const f = k > 0.2 ? d / k : d / 0.2;
+      return { x: p.x + mx * f, y: p.y + my * f };
+    });
+  }
+  function cushionMesh(cu, mat) {
+    const [Ja, Pa, Pb, Jb] = cu.pts;
+    const isSide = (p) => Math.abs(p.x) < 0.25 && Math.abs(Math.abs(p.y) - 0) > 0.1 && Math.abs(p.x) < C.SIDE_MOUTH;
+    const face = filletPolyline([Ja, Pa, Pb, Jb], [0, isSide(Pa) ? 0.016 : 0.007, isSide(Pb) ? 0.016 : 0.007, 0]);
+    // which side is "inside the cushion": the cushion quad's orientation decides
+    const area = (Pa.x - Ja.x) * (Pb.y - Ja.y) - (Pb.x - Ja.x) * (Pa.y - Ja.y) + (Pb.x - Ja.x) * (Jb.y - Ja.y) - (Jb.x - Ja.x) * (Pb.y - Ja.y);
+    const inward = area > 0 ? 1 : -1;
+    const prof = cushionProfile(), N = face.length, K = prof.length;
+    const pos = [], uv = [], idx = [];
+    const along = [0]; for (let i = 1; i < N; i++) along.push(along[i - 1] + Math.hypot(face[i].x - face[i - 1].x, face[i].y - face[i - 1].y));
+    let vacc = 0;
+    for (let k = 0; k < K; k++) {
+      if (k) vacc += Math.hypot(prof[k][0] - prof[k - 1][0], prof[k][1] - prof[k - 1][1]);
+      const row = offsetPolyline(face, prof[k][0], inward);
+      for (let i = 0; i < N; i++) { pos.push(row[i].x, row[i].y, prof[k][1]); uv.push(along[i], vacc); }
+    }
+    for (let k = 0; k < K - 1; k++) for (let i = 0; i < N - 1; i++) {
+      const a = k * N + i, b = a + 1, c = a + N, d = c + 1;
+      if (inward > 0) idx.push(a, b, c, b, d, c); else idx.push(a, c, b, b, c, d);
+    }
+    // end caps at the pocket ends: profile row ends + the back corner at the cloth
+    for (const end of [0, N - 1]) {
+      const base = pos.length / 3, back = offsetPolyline(face, C.CUSHION_W, inward)[end];
+      pos.push(back.x, back.y, 0); uv.push(0, 0);
+      for (let k = 0; k < K - 1; k++) { const a = k * N + end, b = (k + 1) * N + end; if ((end === 0) === (inward > 0)) idx.push(base, b, a); else idx.push(base, a, b); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.receiveShadow = true;
+    return m;
+  }
+
   class CueView {
     constructor(canvas, table) {
       this.canvas = canvas; this.table = table;
@@ -65,12 +136,10 @@ window.QB = window.QB || {};
         bottom.position.set(p.x, p.y, -0.069); bottom.receiveShadow = true; S.add(bottom);
       }
 
-      // cushions: extruded cushion polygons
-      for (const cu of T.cushions) {
-        const sh = new THREE.Shape(cu.pts.map(q => new THREE.Vector2(q.x, q.y)));
-        const g = new THREE.ExtrudeGeometry(sh, { depth: NOSE_H, bevelEnabled: false });
-        const m = new THREE.Mesh(g, cushMat); m.receiveShadow = true; m.castShadow = false; S.add(m);
-      }
+      // cushions with a real profile, swept along jaw - nose - jaw: the nose sits at NOSE_H (where the physics
+      // has it), the face below it slants back under the nose, and the top edge is rounded. The corners where the
+      // nose turns into a jaw are curved (more at the side pockets). Visual only: the physics keeps straight jaws.
+      for (const cu of T.cushions) S.add(cushionMesh(cu, cushMat));
 
       // rails: outer rectangle minus (cushion back line rectangle ∪ pocket circles)
       const X1 = T.L2 + c + rw, Y1 = T.W2 + c + rw, X0 = T.L2 + c, Y0 = T.W2 + c;
@@ -172,40 +241,146 @@ window.QB = window.QB || {};
       const rugMat = new THREE.MeshStandardMaterial({ map: tex(QB.Tex.rug()), roughness: 1 });
       const rugMesh = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.34), rugMat);
       rugMesh.position.z = FLOOR + 0.004; rugMesh.receiveShadow = true; S.add(rugMesh);
-      const RX = 4.4, RY = 3.4, WALL_H = 3.0;                          // room half-size (walls) and wall height
+      const RX = 4.4, RY = 3.4, WALL_H = 3.0, WAIN = 0.85;             // room half-size (walls), wall height, panelling height
       const paper = tex(QB.Tex.wallpaper(), 1, 1), panelTex = tex(QB.Tex.wood(), 1, 1);
       const wall = (cx, cy, len, rot) => {
         const grp = new THREE.Group(); grp.position.set(cx, cy, FLOOR); grp.rotation.z = rot;
-        const pt = paper.clone(); pt.needsUpdate = true; pt.repeat.set(len / 0.5, (WALL_H - 1.0) / 0.5);
-        const up = new THREE.Mesh(new THREE.PlaneGeometry(len, WALL_H - 1.0), new THREE.MeshStandardMaterial({ map: pt, roughness: 0.9 }));
-        up.rotation.x = Math.PI / 2; up.position.set(0, 0, 1.0 + (WALL_H - 1.0) / 2); grp.add(up);
-        const wt = panelTex.clone(); wt.needsUpdate = true; wt.repeat.set(len / 1.0, 1);
-        const low = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.0), new THREE.MeshStandardMaterial({ map: wt, color: 0x8a6e5c, roughness: 0.55 }));
-        low.rotation.x = Math.PI / 2; low.position.set(0, 0, 0.5); grp.add(low);
+        const pt = paper.clone(); pt.needsUpdate = true; pt.repeat.set(len / 0.5, (WALL_H - WAIN) / 0.5);
+        const up = new THREE.Mesh(new THREE.PlaneGeometry(len, WALL_H - WAIN), new THREE.MeshStandardMaterial({ map: pt, roughness: 0.9 }));
+        up.rotation.x = Math.PI / 2; up.position.set(0, 0, WAIN + (WALL_H - WAIN) / 2); grp.add(up);
+        const wt = panelTex.clone(); wt.needsUpdate = true; wt.repeat.set(len / 1.0, WAIN);
+        const low = new THREE.Mesh(new THREE.PlaneGeometry(len, WAIN), new THREE.MeshStandardMaterial({ map: wt, color: 0x8a6e5c, roughness: 0.55 }));
+        low.rotation.x = Math.PI / 2; low.position.set(0, 0, WAIN / 2); grp.add(low);
         const trimMat = new THREE.MeshStandardMaterial({ color: 0x3a1d0e, roughness: 0.5 });
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.06), trimMat); rail.position.set(0, -0.02, 1.0); grp.add(rail);
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.06), trimMat); rail.position.set(0, -0.02, WAIN); grp.add(rail);
         const base = new THREE.Mesh(new THREE.BoxGeometry(len, 0.03, 0.12), trimMat); base.position.set(0, -0.015, 0.06); grp.add(base);
         S.add(grp);
       };
       // a wall's planes face local −y; each wall is turned to face the table
       wall(0, -RY, 2 * RX, Math.PI); wall(0, RY, 2 * RX, 0); wall(-RX, 0, 2 * RY, Math.PI / 2); wall(RX, 0, 2 * RY, -Math.PI / 2);
+      this.buildArt(FLOOR, RX, RY);
+    }
+
+    // ---- paintings in gilded frames, two per wall (js/art.js; see tools/embed-art.js) ----
+    buildArt(FLOOR, RX, RY) {
+      const art = QB.ART || []; if (!art.length) return;
+      const byId = Object.fromEntries(art.map(a => [a.id, a]));
+      const pick = (...ids) => ids.map(id => byId[id]).find(Boolean);
+      // the wall behind the foot of the table (the one you face when shooting from the head) holds Rainer
+      // Oberhänsli's paintings when they are in assets/art (oberhaensli-*.jpg); until then, two classics
+      const ober = art.filter(a => /^oberhaensli/i.test(a.id));
+      const slots = [
+        { a: ober[0] || pick('klee-senecio'), x: RX, y: -1.2 }, { a: ober[1] || pick('hodler-genfersee'), x: RX, y: 1.2 },
+        { a: pick('hodler-thunersee'), x: -RX, y: 1.2 }, { a: pick('hodler-niesen'), x: -RX, y: -1.2 },
+        { a: pick('anker-dorfschule'), x: -1.6, y: RY }, { a: pick('boecklin-toteninsel'), x: 1.6, y: RY },
+        { a: pick('vallotton-grasse'), x: 1.6, y: -RY }, { a: pick('giacometti-maloja'), x: -1.6, y: -RY },
+      ];
+      // gilded frame: molding with a carved (bump-mapped) ornament, corner rosettes, a gold inner bead
+      const orn = document.createElement('canvas'); orn.width = 128; orn.height = 128;
+      { const g = orn.getContext('2d'); g.fillStyle = '#808080'; g.fillRect(0, 0, 128, 128);
+        for (let i = 0; i < 4; i++) { const cx = 16 + i * 32;
+          g.strokeStyle = '#e8e8e8'; g.lineWidth = 5; g.beginPath(); g.arc(cx, 64, 13, 0, Math.PI * 2); g.stroke();       // scrolls
+          g.fillStyle = '#f4f4f4'; g.beginPath(); g.arc(cx, 64, 5, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#d0d0d0'; g.beginPath(); g.arc(cx + 16, 30, 4, 0, Math.PI * 2); g.fill(); g.beginPath(); g.arc(cx + 16, 98, 4, 0, Math.PI * 2); g.fill(); }
+        g.fillStyle = '#383838'; g.fillRect(0, 0, 128, 6); g.fillRect(0, 122, 128, 6); }
+      const bump = new THREE.CanvasTexture(orn); bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.repeat.set(14, 14);
+      const gold = new THREE.MeshStandardMaterial({ color: 0xd4a640, roughness: 0.38, metalness: 0.55, bumpMap: bump, bumpScale: 0.004, emissive: 0x2a1a04 });
+      const goldPlain = new THREE.MeshStandardMaterial({ color: 0xe0b85a, roughness: 0.3, metalness: 0.6, emissive: 0x2a1a04 });
+      const rect = (w, h) => new THREE.Shape([new THREE.Vector2(-w / 2, -h / 2), new THREE.Vector2(w / 2, -h / 2), new THREE.Vector2(w / 2, h / 2), new THREE.Vector2(-w / 2, h / 2)]);
+      const ring = (wo, ho, wi, hi, depth, bevel, mat) => {
+        const sh = rect(wo, ho); sh.holes.push(rect(wi, hi));
+        const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 4, curveSegments: 1 });
+        return new THREE.Mesh(g, mat);
+      };
+      for (const s of slots) {
+        if (!s.a) continue;
+        const img = new Image();
+        const tex = new THREE.Texture(img); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+        img.onload = () => {
+          tex.needsUpdate = true;
+          const asp = img.width / img.height, H = asp >= 1 ? 1.0 / asp : 1.0, W = asp >= 1 ? 1.0 : asp;   // long side 1 m
+          const grp = new THREE.Group(); grp.up.set(0, 0, 1);
+          const picMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75, emissiveMap: tex, emissive: 0x2c2c2c });  // as if lit by a picture light
+          grp.add(new THREE.Mesh(new THREE.PlaneGeometry(W, H), picMat));
+          grp.userData.art = s.a;                    // (double-click: look at this painting)
+          const fw = 0.085;
+          const outer = ring(W + 2 * fw, H + 2 * fw, W + 0.01, H + 0.01, 0.03, 0.014, gold); outer.position.z = -0.02; grp.add(outer);
+          const bead = ring(W + 0.02, H + 0.02, W - 0.004, H - 0.004, 0.012, 0.004, goldPlain); bead.position.z = -0.004; grp.add(bead);
+          for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+            const ro = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 10), goldPlain);
+            ro.scale.set(1, 1, 0.55); ro.position.set(cx * (W / 2 + fw * 0.55), cy * (H / 2 + fw * 0.55), 0.038); grp.add(ro);
+          }
+          // brass plaque: artist · title · year
+          const pc = document.createElement('canvas'); pc.width = 512; pc.height = 96;
+          const pg = pc.getContext('2d'); pg.fillStyle = '#b8964a'; pg.fillRect(0, 0, 512, 96);
+          pg.strokeStyle = '#7a5f26'; pg.lineWidth = 6; pg.strokeRect(3, 3, 506, 90);
+          pg.fillStyle = '#2b1d08'; pg.textAlign = 'center'; pg.font = '600 30px Georgia, serif'; pg.fillText(s.a.artist || '', 256, 40);
+          pg.font = 'italic 24px Georgia, serif'; pg.fillText(`${s.a.title || ''}${s.a.year ? ', ' + s.a.year : ''}`, 256, 74);
+          const pt = new THREE.CanvasTexture(pc); pt.encoding = THREE.sRGBEncoding;
+          const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.056), new THREE.MeshStandardMaterial({ map: pt, roughness: 0.4, metalness: 0.4, emissiveMap: pt, emissive: 0x222222 }));
+          plaque.position.set(0, -H / 2 - fw - 0.07, 0.005); grp.add(plaque);
+          // hang it: centre 1.80 m above the floor (well clear of the panelling below), facing into the room
+          const z = FLOOR + 1.80, off = 0.045;
+          const px = Math.abs(s.x) === RX ? s.x - Math.sign(s.x) * off : s.x, py = Math.abs(s.y) === RY ? s.y - Math.sign(s.y) * off : s.y;
+          grp.position.set(px, py, z);
+          grp.lookAt(Math.abs(s.x) === RX ? 0 : px, Math.abs(s.y) === RY ? 0 : py, z);
+          this.scene.add(grp);
+        };
+        img.src = s.a.data;
+      }
     }
 
     buildLights() {
       const S = this.scene;
-      S.add(new THREE.HemisphereLight(0xfff4e0, 0x2a2018, 0.45));
+      // soft fill for the whole room, plus a ceiling light so every wall is lit
+      S.add(new THREE.HemisphereLight(0xfff4e0, 0x3a2c20, 0.5));
+      const room = new THREE.PointLight(0xffe8c8, 0.55, 0, 1); room.position.set(0, 0, 2.15); S.add(room);
+      // the billiard lamp: three shades on a bar, ~1 m above the cloth (WPA: at least 40"). Each shade holds a
+      // spotlight that casts its own soft shadow, so every ball gets the faint triple shadow of a real table.
+      // simple lighting (the "realistic shadows" setting off): one steady light from straight above
       const key = new THREE.DirectionalLight(0xfff2dc, 1.1);
       key.position.set(0.2, 0.15, 3); key.target.position.set(0, 0, 0);
-      key.castShadow = true;
-      key.shadow.mapSize.set(2048, 2048);
-      const sc = key.shadow.camera; sc.left = -2.0; sc.right = 2.0; sc.top = 1.35; sc.bottom = -1.35; sc.near = 1; sc.far = 4.5;   // (incl. the table's shadow on the rug)
+      key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+      const sc = key.shadow.camera; sc.left = -2.0; sc.right = 2.0; sc.top = 1.35; sc.bottom = -1.35; sc.near = 1; sc.far = 4.5;
       key.shadow.bias = -0.0005; key.shadow.radius = 3;
       S.add(key); S.add(key.target);
-      // three pool lamps along the table for highlights
-      for (const x of [-0.8, 0, 0.8]) {
-        const l = new THREE.PointLight(0xfff0d0, 0.6, 3.0, 2);
-        l.position.set(x, 0, 1.0); S.add(l);
+      this.simpleLights = [key];
+      for (const x of [-0.8, 0, 0.8]) { const l = new THREE.PointLight(0xfff0d0, 0.6, 3.0, 2); l.position.set(x, 0, 1.0); S.add(l); this.simpleLights.push(l); }
+      this.lampLights = [];
+      const lampZ = 1.0, xs = [-0.32, 0, 0.32].map(f => f * C.TABLE_L);
+      // (the fixture is hidden when the camera is above it, e.g. in the overview after a shot, so it never blocks the table)
+      const L = this.lampGroup = new THREE.Group(); S.add(L);
+      const shadeOut = new THREE.MeshStandardMaterial({ color: 0x1f4a33, roughness: 0.35, metalness: 0.3, side: THREE.DoubleSide });
+      const shadeIn = new THREE.MeshBasicMaterial({ color: 0xfff1cf, side: THREE.BackSide });
+      const brass = new THREE.MeshStandardMaterial({ color: 0xb08a3c, roughness: 0.35, metalness: 0.8 });
+      const prof = []; for (let k = 0; k <= 12; k++) { const t = k / 12; prof.push(new THREE.Vector2(0.03 + 0.17 * Math.sin((1 - t) * Math.PI / 2), 0.16 * t)); }
+      const domeOut = new THREE.LatheGeometry(prof, 32), domeIn = new THREE.LatheGeometry(prof.map(v => new THREE.Vector2(v.x * 0.97, v.y)), 32);
+      for (const x of xs) {
+        for (const [geo, mat] of [[domeOut, shadeOut], [domeIn, shadeIn]]) {
+          const m = new THREE.Mesh(geo, mat); m.rotation.x = Math.PI / 2; m.position.set(x, 0, lampZ); L.add(m);
+        }
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: 0xfffbe8 }));
+        bulb.position.set(x, 0, lampZ + 0.07); L.add(bulb);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.08, 8), brass);
+        stem.rotation.x = Math.PI / 2; stem.position.set(x, 0, lampZ + 0.2); L.add(stem);
+        const sp = new THREE.SpotLight(0xfff1d6, 0.62, 0, 1.1, 0.65, 1);
+        sp.position.set(x, 0, lampZ + 0.06); sp.target.position.set(x, 0, 0);
+        sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.bias = -0.0006; sp.shadow.radius = 4;
+        sp.shadow.camera.near = 0.3; sp.shadow.camera.far = 2.5;
+        S.add(sp); S.add(sp.target); this.lampLights.push(sp);
       }
+      const barLen = xs[2] - xs[0] + 0.5;
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(barLen, 0.045, 0.045), brass); bar.position.set(0, 0, lampZ + 0.24); L.add(bar);
+      for (const x of [-barLen / 2 + 0.05, barLen / 2 - 0.05]) {          // hanging rods up to the ceiling
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 1.0, 6), brass);
+        rod.rotation.x = Math.PI / 2; rod.position.set(x, 0, lampZ + 0.24 + 0.5); L.add(rod);
+      }
+    }
+
+    // realistic: the three lamp spotlights each cast shadows; otherwise one light from above (cheaper)
+    setRealisticShadows(on) {
+      for (const l of this.lampLights || []) l.visible = !!on;
+      for (const l of this.simpleLights || []) l.visible = !on;
     }
 
     buildCue() {
@@ -353,17 +528,22 @@ window.QB = window.QB || {};
       else { w.route = null; w.x = x; w.y = y; }               // drag the dot: follow it
     }
     endMove() { /* nothing to reset */ }
+    // turning with the view cone: the point you look at swings round you at the same distance and height,
+    // so the up/down viewing angle stays the same (and that point stays fixed while you walk)
     setYaw(yaw) {
       const w = this.walk; if (!w) return;
-      w.yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
-      w.focus = this.rayFocus(w.x, w.y, w.yaw);
+      yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+      if (!w.focus) { const t = this.walkPose().target; w.focus = [t[0], t[1], t[2]]; }   // what you look at now
+      const d = Math.max(0.4, Math.hypot(w.focus[0] - w.x, w.focus[1] - w.y));
+      w.focus = [w.x + Math.cos(yaw) * d, w.y + Math.sin(yaw) * d, w.focus[2]];
+      w.yaw = yaw;
     }
     // the fixed point itself can be dragged on the map (e.g. onto a ball); it stays on the cloth
     focusAt(x, y) { const w = this.walk; return !!(w && w.focus) && Math.hypot(x - w.focus[0], y - w.focus[1]) < 0.08; }
-    setFocus(x, y, z = 0) {
+    setFocus(x, y, z = 0, free = false) {      // free: any point in the room (walls, paintings ...), else on the cloth
       const w = this.walk; if (!w) return;
       const T = this.table;
-      w.focus = [Math.max(-T.L2, Math.min(T.L2, x)), Math.max(-T.W2, Math.min(T.W2, y)), z];
+      w.focus = free ? [x, y, z] : [Math.max(-T.L2, Math.min(T.L2, x)), Math.max(-T.W2, Math.min(T.W2, y)), z];
     }
     // What is under the pointer in the 3D view? A ray from the camera through the pixel; the first thing it hits
     // counts (a ball in front hides the one behind it). Returns {x, y, z, ball} or null (floor, sky, ...).
@@ -384,9 +564,11 @@ window.QB = window.QB || {};
           if (m === o && b.onTable) return { x: b.x, y: b.y, z: R, ball: b };
         }
         const p = hit.point;
-        if (Math.abs(p.x) <= T.L2 + 0.25 && Math.abs(p.y) <= T.W2 + 0.25)                   // cloth, cushion or rail
+        let art = null; for (let q = o; q && !art; q = q.parent) art = q.userData && q.userData.art;
+        if (art) { const c = new THREE.Vector3(); o.parent.getWorldPosition(c); return { x: c.x, y: c.y, z: c.z, ball: null, art, free: true }; }   // a painting: its centre
+        if (Math.abs(p.x) <= T.L2 + 0.25 && Math.abs(p.y) <= T.W2 + 0.25 && p.z > -0.02 && p.z < 0.06)   // cloth, cushion or rail
           return { x: Math.max(-T.L2, Math.min(T.L2, p.x)), y: Math.max(-T.W2, Math.min(T.W2, p.y)), z: 0, ball: null };
-        return null;                                                                          // floor etc.
+        return { x: p.x, y: p.y, z: p.z, ball: null, free: true };                            // walls, floor, rug, lamp, legs ...
       }
       return null;
     }
@@ -454,7 +636,7 @@ window.QB = window.QB || {};
 
     // high view from behind the shot line that shows the whole table (farther back in a narrow window)
     overviewPose(aim) {
-      const dx = Math.cos(aim), dy = Math.sin(aim), k = Math.max(1, 1.45 / (this.camera.aspect || 1.6));
+      const dx = Math.cos(aim), dy = Math.sin(aim), k = Math.max(1, 1.45 / (this.camera.aspect || 1.6)) * Math.max(0.8, C.TABLE_L / 2.54);
       return { eye: [-dx * 2.6 * k, -dy * 2.6 * k, 2.2 * k], target: [-dx * 0.2, -dy * 0.2, 0] };
     }
     freeze(pose) { this.frozen = pose; }
@@ -510,6 +692,7 @@ window.QB = window.QB || {};
         this.lastPose = pose;
         this.camera.position.set(...pose.eye);
         this.camera.lookAt(...pose.target);
+        if (this.lampGroup) this.lampGroup.visible = pose.eye[2] < 1.3;
       }
       // drop meshes of balls that are no longer in the world (new rack / drill)
       for (const [id, mesh] of this.balls) if (!st.balls[id] || st.balls[id].num !== mesh.userData.num) { this.scene.remove(mesh); this.balls.delete(id); }

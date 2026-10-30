@@ -1033,6 +1033,24 @@
     if (isMap()) returnToShot();          // double-click the map: back to the shooting position, standing
   });
   $('btnArrange').onclick = () => setArrange(!S.arrange);
+
+  // ---------------- Settings (pop-up with all the display options; remembered) ----------------
+  const settingsBox = $('settingsModal');
+  const settingInputs = () => [...settingsBox.querySelectorAll('input[type=checkbox]')];
+  const settingDefaults = Object.fromEntries(settingInputs().map(el => [el.id, el.defaultChecked]));
+  function saveSettings() {
+    try { localStorage.setItem('qball.settings', JSON.stringify(Object.fromEntries(settingInputs().map(el => [el.id, el.checked])))); } catch (e) { /* ignore */ }
+  }
+  function applySettings(vals) {
+    for (const el of settingInputs()) if (vals[el.id] !== undefined && el.checked !== !!vals[el.id]) { el.checked = !!vals[el.id]; el.dispatchEvent(new Event('change')); }
+  }
+  $('btnSettings').onclick = () => { settingsBox.hidden = false; };
+  $('btnSettingsClose').onclick = () => { settingsBox.hidden = true; };
+  $('btnSettingsDefaults').onclick = () => { applySettings(settingDefaults); saveSettings(); };
+  settingsBox.addEventListener('click', (ev) => { if (ev.target === settingsBox) settingsBox.hidden = true; });   // click outside
+  window.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !settingsBox.hidden) settingsBox.hidden = true; });
+  for (const el of settingInputs()) el.addEventListener('change', saveSettings);
+  $('optShadows').onchange = (e) => { if (view3d) view3d.setRealisticShadows(e.target.checked); };
   $('btnRestoreSetup').onclick = () => { if (S.phase !== 'moving' && S.setup) { restore(S.setup); updateActivityUI(); setStatus('Back to the position before the last shot.', true); } };
 
   // ---------------- Menus ----------------
@@ -1138,6 +1156,16 @@
   $('tabGames').onclick = () => showMenu('games');
   $('tabDrills').onclick = () => showMenu('drills');
   $('tabLessons').onclick = () => showMenu('lessons');
+  // table size: stored, then the page reloads so the whole table and room are rebuilt at that size
+  $('selTable').value = String(QB.tableFt);
+  $('selTable').onchange = (e) => {
+    const ft = +e.target.value, sz = QB.TABLE_SIZES[ft];
+    if (!sz || ft === QB.tableFt) return;
+    try { localStorage.setItem('qball.tableFt', String(ft)); } catch (err) { /* ignore */ }
+    setStatus(`Setting up a ${sz.label} table (${sz.note})…`, true);
+    setTimeout(() => location.reload(), 150);
+  };
+  for (const o of $('selTable').options) { const sz = QB.TABLE_SIZES[+o.value]; if (sz) o.title = sz.note; }
   $('btnMenu').onclick = () => showMenu(S.act.kind === 'lesson' ? 'lessons' : S.act.kind === 'drill' || S.act.id === 'place' ? 'drills' : 'games');
   $('btnRack').onclick = restartActivity;
   $('btnEasier').onclick = () => changeDrillLevel(-1);
@@ -1642,8 +1670,10 @@
     const hit = view3d.pick(clientX, clientY, world.balls);
     if (!hit) return;
     if (!view3d.walk) { if (S.view !== '3d' || S.phase !== 'aim') return; startWalking(); if (!view3d.walk) return; }
-    view3d.setFocus(hit.x, hit.y, hit.z);
-    setStatus(hit.ball ? `Looking at the ${hit.ball.num === 0 ? 'cue ball' : hit.ball.num + '-ball'} — you keep facing it as you walk.` : 'Looking at that spot — you keep facing it as you walk.');
+    view3d.setFocus(hit.x, hit.y, hit.z, !!hit.free);
+    const what = hit.ball ? `the ${hit.ball.num === 0 ? 'cue ball' : hit.ball.num + '-ball'}`
+      : hit.art ? `${hit.art.artist}, “${hit.art.title}”${hit.art.year ? ` (${hit.art.year})` : ''}` : 'that spot';
+    setStatus(`Looking at ${what} — you keep facing it as you walk.`);
   }
   cv3.addEventListener('dblclick', (ev) => { if (!realTouch(ev)) stareAt(ev.clientX, ev.clientY); });
   let lastTap3 = null;
@@ -1724,6 +1754,8 @@
   window.addEventListener('resize', onResize);
   let savedView = 'split'; try { savedView = localStorage.getItem('qball.view') || 'split'; } catch (e) { /* ignore */ }
   setView(savedView);
+  { let saved = null; try { saved = JSON.parse(localStorage.getItem('qball.settings') || 'null'); } catch (e) { /* ignore */ } if (saved) applySettings(saved); }
+  if (view3d) view3d.setRealisticShadows($('optShadows').checked);
   onResize();
   setTip(0, 0); setElev(0); updateActivityUI(); defaultStatus(); syncInputs(true); renderReport();
   window.addEventListener('resize', () => { drawTipPad(); drawElevPad(); });

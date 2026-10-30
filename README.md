@@ -30,11 +30,15 @@ To host it, any static web host works. For example, turn on **GitHub Pages** (Se
 - **Lessons:** step-by-step introductions with explanations (Lesson 1: the stop shot).
 - **Drills:** Billiard University–style target drills with level progression and scoring, and pattern drills (L-drill, line-ups, rail balls, diamond grid, Dr. Dave's 3-ball drill, random layouts, play the ghost).
 - **Free ball placement:** build any position from all 15 balls.
-- **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table. Balls have a satin finish with light wear (faint chalk marks and scuffs), the cloth has a felt texture with a faint nap and light wear along the break lane, the rails are grained wood, and the table stands on six turned legs on a patterned rug in a wood-panelled room (all textures are generated in the browser, `js/textures.js`). Pocketed balls don't just vanish: they drop into the pocket, rattle off its wall (a slow ball circles the rim), bounce on the bottom and settle in the pocket (several balls stack up in the same pocket). They stay there until they are re-spotted or re-racked (a visual animation; the physics and rules count the ball as pocketed the moment its centre crosses the drop line). After a shot the 3D camera pulls back to an overview of the whole table while the balls roll, then returns to your aiming view (can be turned off).
-- **Aiming aids** (each can be turned off): aim line, ghost ball, a red cross on the cue ball where the tip will hit (3D), an **eclipse view** (a small inset looking exactly along the cue line: the cue ball's outline over the object ball shows the ball fraction, e.g. 50% for a half-ball hit), object-ball path, cue-ball path (after hitting a ball or a cushion), tangent line, ball trails, practice markings.
+- **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table. Balls have a satin finish with light wear (faint chalk marks and scuffs), the cloth has a felt texture with a faint nap and light wear along the break lane, the cushions have a real profile (rounded nose, face slanting back under it, curved jaws at the pockets), the rails are grained wood, and the table stands on six turned legs on a patterned rug in a wood-panelled room with paintings by Swiss artists in gilded frames, lit by a three-shade billiard lamp whose spotlights give each ball its soft shadows (all textures are generated in the browser, `js/textures.js`). Pocketed balls don't just vanish: they drop into the pocket, rattle off its wall (a slow ball circles the rim), bounce on the bottom and settle in the pocket (several balls stack up in the same pocket). They stay there until they are re-spotted or re-racked (a visual animation; the physics and rules count the ball as pocketed the moment its centre crosses the drop line). After a shot the 3D camera pulls back to an overview of the whole table while the balls roll, then returns to your aiming view (can be turned off in Settings).
+- **Settings** (⚙ in the top bar; remembered): realistic shadows from the three lamps (or one light from above), the post-shot overview, and **aiming aids** (each can be turned off): aim line, ghost ball, a red cross on the cue ball where the tip will hit (3D), an **eclipse view** (a small inset looking exactly along the cue line: the cue ball's outline over the object ball shows the ball fraction, e.g. 50% for a half-ball hit), object-ball path, cue-ball path (after hitting a ball or a cushion), tangent line, ball trails, practice markings.
 - **Test mode** for physics experiments: exact inputs, sliders for every physics parameter, shot reports, replay, slow motion, and copy/paste of complete shots as JSON.
 
 ## How to play
+
+### Table size
+
+Choose a **9 ft** (tournament, 100" × 50" playing surface; the default), **8 ft** (home table, 88" × 44") or **7 ft** (bar box, 78" × 39") table in the top bar. The choice is remembered; the page reloads and builds everything — table, pockets, markings, drills, lessons and the 3D room — at that size. Pockets and balls keep their regulation sizes.
 
 ### Shooting (top view)
 
@@ -64,7 +68,7 @@ Touch is detected automatically. With a mouse, the **👆 Touch mode** button in
 - **Shoot:** drag the little cue on the right side down to pull back, then release.
 - **Zoom:** mouse wheel. Zooming in gets you down on the shot (eye just above the cue); zooming out stands you up. When you raise the cue, the view backs off automatically so the whole stick stays visible.
 - **Map:** in 3D-only view, a small top-view map appears for ball in hand and arranging balls; the 🗺 button shows it any time. It sits in the lower left; drag it anywhere by the ✥ grip in its corner (double-click the grip to put it back).
-- **Walk mode:** press **🚶 walk**, or keep zooming out after you're standing, to stand up where you are. Everything is steered from the map: drag the blue dot to move (or click where to go; you walk around the table, not through it) and drag the blue view cone to turn, or double-click (double-tap) anything in the 3D view — a ball or a spot on the cloth — to look at it; a ball in front hides the ones behind it. Double-clicking in the 3D view from your shot stands you up into walk mode looking there. Turning fixes a spot on the table (shown as a ring on the map: the middle of where your line of sight crosses the table), and as you walk you keep facing it. You can also drag the crosshair itself, e.g. onto a ball (it snaps to the ball), to keep looking at that ball while you walk around it. Point the cone off the table to release it; your direction then stays the same while you walk. The wheel (or a pinch) on the 3D view bends you down toward the table. The cue walks with you: while walking you carry it (shown see-through, along your line of sight; on the map through the blue dot), and when you return to your shot (press walk again, double-click the map, or pick up the cue) you aim in that direction, with the zoom you had before.
+- **Walk mode:** press **🚶 walk**, or keep zooming out after you're standing, to stand up where you are. Everything is steered from the map: drag the blue dot to move (or click where to go; you walk around the table, not through it) and drag the blue view cone to turn (the view turns at the same up/down angle), or double-click (double-tap) anything in the 3D view — a ball, a spot on the cloth, a painting or a spot on the wall — to look at it; a ball in front hides the ones behind it. Double-clicking in the 3D view from your shot stands you up into walk mode looking there. The spot you look at is shown as a ring on the map and stays fixed: as you walk you keep facing it. You can also drag the crosshair itself, e.g. onto a ball (it snaps to the ball), to keep looking at that ball while you walk around it. The wheel (or a pinch) on the 3D view bends you down toward the table. The cue walks with you: while walking you carry it (shown see-through, along your line of sight; on the map through the blue dot), and when you return to your shot (press walk again, double-click the map, or pick up the cue) you aim in that direction, with the zoom you had before.
 
 ### Lessons
 
@@ -167,6 +171,8 @@ js/physics.js       ball motion, collisions, cushion models, cue impact
 js/render.js        2D top view (canvas)
 js/view3d.js        3D cue view and walk mode (three.js)
 js/textures.js      procedural cloth, felt, wood, rug, floor and wallpaper textures
+js/art.js           the paintings (generated by tools/embed-art.js from assets/art/)
+tools/embed-art.js  packs assets/art/*.jpg into js/art.js
 js/setups.js        game racks and drill definitions
 js/lessons.js       lessons: setups, limits, steps and texts
 js/audio.js         sounds (Web Audio, generated)
@@ -189,6 +195,13 @@ assets/             icon and screenshot
 - S. Mathavan, M. R. Jackson, R. M. Parkin, "A theoretical analysis of billiard ball dynamics under cushion impacts," *Proc. IMechE Part C* 224 (2010).
 - H. Han, "Dynamics in carom and three cushion billiards," *J. Mech. Sci. Technol.* 19 (2005).
 - Drills inspired by the [Billiard University](https://billiarduniversity.org/) exams and [Dr. Dave's drill pages](https://drdavepoolinfo.com/). Ball positions are approximations, not the official diagrams.
+
+## Art in the 3D room
+
+The paintings are packed into `js/art.js` by `node tools/embed-art.js` from `assets/art/` (images + `paintings.json`).
+
+- **Public domain** (via Wikimedia Commons): Ferdinand Hodler, *Lake Thun with Symmetrical Reflection* (1905), *The Niesen* (1910) and *Lake Geneva from Chexbres* (1905); Albert Anker, *The Village School of 1848* (1896); Arnold Böcklin, *Isle of the Dead* (first version, 1880); Félix Vallotton, *Sunset at Grasse* (1918); Giovanni Giacometti, *Maloja in Winter*; Paul Klee, *Senecio* (1922).
+- **Rainer Oberhänsli**, two *Horizont* paintings — © the artist, used with his permission ([raineroberhaensli.ch](http://www.raineroberhaensli.ch/galerie.htm)). These are not covered by this project's licence and may not be reused without the artist's permission.
 
 ## Credits
 

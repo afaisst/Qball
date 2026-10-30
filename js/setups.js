@@ -163,7 +163,8 @@ window.QB = window.QB || {};
       goal: 'Nine balls in an L that boxes in a corner pocket: one on the foot spot, four across the table and four along the long rail. Ball in hand, run them all without missing.',
       balls(table) {
         // corner ball on the foot spot; legs toward the bottom long rail and toward the foot rail (bottom-right pocket)
-        const cx = table.footSpot.x, cy = table.footSpot.y, sp = 0.135, out = [{ x: cx, y: cy }];
+        const cx = table.footSpot.x, cy = table.footSpot.y, out = [{ x: cx, y: cy }];
+        const sp = Math.min(0.135, (Math.min(table.L2 - cx, table.W2) - R - 0.02) / 4);   // 13.5 cm, closer on small tables
         for (let k = 1; k <= 4; k++) out.push({ x: cx, y: cy - k * sp });   // across the table
         for (let k = 1; k <= 4; k++) out.push({ x: cx + k * sp, y: cy });   // along the long rail direction
         const nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -175,7 +176,8 @@ window.QB = window.QB || {};
       goal: 'Line-of-balls drill: nine balls on the long string down the middle of the table. Ball in hand, clear them in any order without missing.',
       balls(table) {
         const nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        return nums.map((n, i) => ({ num: n, x: -0.95 + i * 0.2375, y: 0 }));
+        const k = table.L2 / 1.27;                                   // spacing was laid out on a 9-ft table
+        return nums.map((n, i) => ({ num: n, x: (-0.95 + i * 0.2375) * k, y: 0 }));
       },
     },
     {
@@ -183,7 +185,8 @@ window.QB = window.QB || {};
       goal: 'Nine balls across the table on the line between the side pockets. Ball in hand, clear them in any order.',
       balls(table) {
         const nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        return nums.map((n, i) => ({ num: n, x: 0, y: -0.48 + i * 0.12 }));
+        const k = table.W2 / 0.635;
+        return nums.map((n, i) => ({ num: n, x: 0, y: (-0.48 + i * 0.12) * k }));
       },
     },
     {

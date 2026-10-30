@@ -4,10 +4,20 @@
 // +y toward the top long rail, +z up out of the cloth.
 window.QB = window.QB || {};
 
+// Table size (playing surface, cushion nose to cushion nose). The player can choose; the choice is stored and the
+// page reloads, so everything (rails, pockets, markings, drills, the 3D room) is built for that size.
+QB.TABLE_SIZES = {
+  9: { L: 2.540, W: 1.270, label: '9 ft', note: 'tournament, 100" × 50"' },
+  8: { L: 2.235, W: 1.118, label: '8 ft', note: 'home table, 88" × 44"' },
+  7: { L: 1.981, W: 0.991, label: '7 ft', note: 'bar box, 78" × 39"' },
+};
+QB.tableFt = 9;
+try { const f = +localStorage.getItem('qball.tableFt'); if (QB.TABLE_SIZES[f]) QB.tableFt = f; } catch (e) { /* no storage (e.g. Node tests) */ }
+
 QB.C = {
-  // --- Table (9-ft, WPA spec playing surface 100" x 50") ---
-  TABLE_L: 2.54,          // playing length (cushion nose to cushion nose)
-  TABLE_W: 1.27,          // playing width
+  // --- Table (default 9 ft, WPA spec playing surface 100" x 50"; see QB.TABLE_SIZES) ---
+  TABLE_L: QB.TABLE_SIZES[QB.tableFt].L,   // playing length (cushion nose to cushion nose)
+  TABLE_W: QB.TABLE_SIZES[QB.tableFt].W,   // playing width
   CUSHION_W: 0.05,        // visual/physical depth of cushion rubber behind the nose line
   RAIL_W: 0.11,           // wooden rail width (visual only)
 
