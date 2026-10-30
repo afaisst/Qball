@@ -218,6 +218,14 @@ button, label.chk { touch-action: manipulation; }
 #helpModal ul { padding-left: 18px; margin: 6px 0; } #helpModal li { margin: 6px 0; }
 .bigbtns { display: flex; gap: 8px; margin: 4px 0 2px; }
 .bigbtns button.big { flex: 1; padding: 12px 8px; font-size: 16px; font-weight: 600; border-radius: 10px; }
+/* drag grips (eclipse inset, pop-ups): same look as the mini map's */
+.dgrip { position: absolute; left: 6px; top: 6px; z-index: 10; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+  background: rgba(0,0,0,0.6); color: #cfd6db; font-size: 15px; line-height: 1; cursor: move; touch-action: none; user-select: none;
+  pointer-events: auto; border: 1px solid rgba(255,255,255,0.15); }
+.dgrip:hover { background: rgba(79,179,255,0.35); color: #fff; }
+#lessonModal .lbox, #settingsModal .lbox, #helpModal .lbox { position: relative; }
+#lessonModal h2, #settingsModal h2, #helpModal h2 { padding-left: 32px; }
+#eclipse.moved { right: auto; }
 /* tablet in portrait: table on top, panel below */
 @media (max-width: 900px) and (orientation: portrait) {
   main { flex-direction: column; }

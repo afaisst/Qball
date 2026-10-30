@@ -547,8 +547,6 @@
     // miscue limit
     ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.strokeStyle = 'rgba(200,16,46,0.6)';
     ctx.beginPath(); ctx.arc(c, c, r * QB.miscueLimit(world.params), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    // natural-roll marker (0.4R above center)
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(c, c - 0.4 * r, 2 * dpr, 0, Math.PI * 2); ctx.fill();
     // near a rail: shade the part of the ball the cue can't reach at this elevation (it would hit the cushion)
     const E = computeEffTip();
     if (cue && nearRail()) {
@@ -1045,6 +1043,57 @@
     for (const el of settingInputs()) if (vals[el.id] !== undefined && el.checked !== !!vals[el.id]) { el.checked = !!vals[el.id]; el.dispatchEvent(new Event('change')); }
   }
   $('btnSettings').onclick = () => { settingsBox.hidden = false; };
+  // ---------------- drag grips: the eclipse inset and the pop-ups can be moved by the ✥ in their corner ----------------
+  function addGrip(box, opts) {
+    const g = document.createElement('div'); g.className = 'dgrip'; g.textContent = '✥'; g.title = 'Drag to move (double-click: back to its place)';
+    box.appendChild(g);
+    let drag = null;
+    g.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      const r = box.getBoundingClientRect(); drag = { dx: ev.clientX - r.left, dy: ev.clientY - r.top };
+      g.setPointerCapture(ev.pointerId);
+    });
+    g.addEventListener('pointermove', (ev) => { if (drag) opts.move(ev.clientX - drag.dx, ev.clientY - drag.dy); });
+    const end = () => { if (drag) { drag = null; if (opts.end) opts.end(); } };
+    g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end);
+    g.addEventListener('dblclick', (ev) => { ev.stopPropagation(); opts.reset(); });
+  }
+  // pop-ups: move freely on the screen (kept for as long as the page is open)
+  for (const id of ['settingsModal', 'helpModal', 'lessonModal']) {
+    const box = $(id).querySelector('.lbox');
+    addGrip(box, {
+      move(x, y) {
+        const r = box.getBoundingClientRect();
+        x = Math.max(4, Math.min(window.innerWidth - r.width - 4, x)); y = Math.max(4, Math.min(window.innerHeight - 40, y));
+        Object.assign(box.style, { position: 'fixed', left: x + 'px', top: y + 'px', margin: '0' });
+      },
+      reset() { Object.assign(box.style, { position: '', left: '', top: '', margin: '' }); },
+    });
+  }
+  // eclipse inset: moves inside the playing area; its place is remembered (fractions of the free space)
+  {
+    const box = $('eclipse'); let pos = null;
+    try { pos = JSON.parse(localStorage.getItem('qball.eclPos') || 'null'); } catch (e) { /* ignore */ }
+    const place = () => {
+      if (!pos) { box.classList.remove('moved'); box.style.left = ''; box.style.top = ''; return; }
+      const sr = stageEl.getBoundingClientRect(), w = box.offsetWidth || 190, h = box.offsetHeight || 140;
+      box.style.left = (4 + pos.fx * Math.max(0, sr.width - w - 8)).toFixed(0) + 'px';
+      box.style.top = (4 + pos.fy * Math.max(0, sr.height - h - 8)).toFixed(0) + 'px';
+      box.classList.add('moved');
+    };
+    addGrip(box, {
+      move(x, y) {
+        const sr = stageEl.getBoundingClientRect(), w = box.offsetWidth, h = box.offsetHeight;
+        pos = { fx: Math.min(1, Math.max(0, (x - sr.left - 4) / Math.max(1, sr.width - w - 8))), fy: Math.min(1, Math.max(0, (y - sr.top - 4) / Math.max(1, sr.height - h - 8))) };
+        place();
+      },
+      end() { try { localStorage.setItem('qball.eclPos', JSON.stringify(pos)); } catch (e) { /* ignore */ } },
+      reset() { pos = null; try { localStorage.removeItem('qball.eclPos'); } catch (e) { /* ignore */ } place(); },
+    });
+    window.addEventListener('resize', place);
+    place();
+  }
+
   // Help: the controls, in a pop-up (button in the top bar, or the ? key)
   const helpBox = $('helpModal');
   $('btnHelp').onclick = () => { helpBox.hidden = false; };
@@ -1208,6 +1257,11 @@
   $('btnTouch').hidden = touchOnly;
   $('btnTouch').onclick = () => setTouchMode(!S.touchMode);
   { let saved = false; try { saved = localStorage.getItem('qball.touch') === '1'; } catch (e) { /* ignore */ } if (saved) setTouchMode(true, true); }
+  // test mode: tune the post-shot overview camera
+  S.ovBack = 1.8; S.ovHeight = 0.9;
+  $('optAimBack').oninput = (e) => { const v = parseFloat(e.target.value); if (view3d) view3d.aimBack = v; $('aimBackVal').textContent = (v * 100).toFixed(0) + ' cm'; };
+  $('optOvBack').oninput = (e) => { S.ovBack = parseFloat(e.target.value); $('ovBackVal').textContent = S.ovBack.toFixed(2) + ' m'; };
+  $('optOvHeight').oninput = (e) => { S.ovHeight = parseFloat(e.target.value); $('ovHeightVal').textContent = S.ovHeight.toFixed(2) + ' m'; };
   $('optTimeScale').oninput = (e) => { S.timeScale = parseFloat(e.target.value); $('tsVal').textContent = S.timeScale.toFixed(2) + '×'; };
 
   const posInputs = [['cbx', () => cue, 'x'], ['cby', () => cue, 'y'], ['obx', () => S.selBall, 'x'], ['oby', () => S.selBall, 'y']];
@@ -1429,6 +1483,7 @@
         const nx = dx / dist, ny = dy / dist, nz = dz / dist, push = (2 * R - dist) / 2;
         a.x -= nx * push; a.y -= ny * push; a.z -= nz * push; c.x += nx * push; c.y += ny * push; c.z += nz * push;
         const vn = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny + (c.vz - a.vz) * nz;
+        if (vn < -0.15) QB.Sound.ballInPocket(-vn);
         if (vn < 0) { const jn = -(1 + 0.3) * vn / 2; a.vx -= jn * nx; a.vy -= jn * ny; a.vz -= jn * nz; c.vx += jn * nx; c.vy += jn * ny; c.vz += jn * nz; }
       }
     }
@@ -1437,7 +1492,10 @@
     const p = d.p; d.t += s;
     // vertical: free fall, bounce on the pocket bottom
     d.vz -= 9.81 * s; d.z += d.vz * s;
-    if (d.z < DROP_FLOOR) { d.z = DROP_FLOOR; d.vz = d.vz < -0.25 ? -d.vz * 0.3 : 0; }
+    if (d.z < DROP_FLOOR) {
+      if (d.vz < -0.25) QB.Sound.pocketDrop(-d.vz, S.drops.some(q => q !== d && q.p === d.p && q.t > d.t));   // landing (on other balls?)
+      d.z = DROP_FLOOR; d.vz = d.vz < -0.25 ? -d.vz * 0.3 : 0;
+    }
     // horizontal: the hole edge, then the bag wall; the deeper the ball, the farther out it can go
     d.x += d.vx * s; d.y += d.vy * s;
     const sink = Math.min(1, Math.max(0, (R - d.z) / R)), rw = p.r + (BAG_EXTRA - R) * sink;
@@ -1477,6 +1535,8 @@
       else syncInputs();
     }
     if (S.drops.length) stepDrops(dt * S.timeScale);
+    // cloth rumble: louder the more (and faster) the balls roll
+    { let sum = 0; if (S.phase === 'moving') for (const b of world.balls) if (b.onTable) sum += b.speed; QB.Sound.roll(Math.min(1, sum / 3) * Math.min(1, S.timeScale * 2)); }
     updatePrediction(now);
     updateCBPath(now);
     draw();
@@ -1526,7 +1586,10 @@
     drawPowerCue(pb);                          // (hidden widgets have zero size and are skipped)
     const eclOn = !!view3d && $('optEclipse').checked && (S.phase === 'aim' || S.phase === 'pull') && cue.onTable && !arranging;
     $('eclipse').hidden = !eclOn;
-    if (cueViewOn() || eclOn) view3d.render({ drops: S.drops, drawMain: cueViewOn(), overview: S.phase === 'moving' && $('optOverview').checked, eclipse: eclOn ? eclEls : null, balls: world.balls, cue, aimAngle: S.aim, elev: S.elev / DEG, tipX: eff().x, tipY: eff().y,
+    // while the balls roll, the cue stays where the shot was played (and the overview camera is set behind it)
+    const sc = S.phase === 'moving' && S.lastShot && S.setup && S.setup[cue.id] ? { x: S.setup[cue.id].x, y: S.setup[cue.id].y,
+      aim: S.lastShot.angle, elev: (S.lastShot.elev || 0) / DEG, tipX: S.lastShot.tipX, tipY: S.lastShot.tipY, pull: 0 } : null;
+    if (cueViewOn() || eclOn) view3d.render({ shotCue: sc, ovBack: S.ovBack, ovHeight: S.ovHeight, drops: S.drops, drawMain: cueViewOn(), overview: S.phase === 'moving' && $('optOverview').checked, eclipse: eclOn ? eclEls : null, balls: world.balls, cue, aimAngle: S.aim, elev: S.elev / DEG, tipX: eff().x, tipY: eff().y,
       pull: pb, showCue, showAids: !!aim && aidsOn && !arranging, showGhost: !!aim && ghostOn && !arranging, showTipMark: $('optTipMark').checked && !arranging, showBounce: $('optCBPath').checked, aim, cbPath: arranging ? null : S.cbPath, showTangent: $('optTangent').checked,
       zone: S.act.kind === 'drill' ? S.act.zone : null, chalk: S.chalk });
     if (showCue) {

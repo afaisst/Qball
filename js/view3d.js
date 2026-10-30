@@ -143,10 +143,20 @@ window.QB = window.QB || {};
 
       // rails: outer rectangle minus (cushion back line rectangle ∪ pocket circles)
       const X1 = T.L2 + c + rw, Y1 = T.W2 + c + rw, X0 = T.L2 + c, Y0 = T.W2 + c;
-      // outer edge subdivided (so the cap triangles stay local and the wood grain can follow each rail)
-      const outerPts = [], sub = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 0.05); for (let i = 0; i < n; i++) outerPts.push(new THREE.Vector2(ax + (bx - ax) * i / n, ay + (by - ay) * i / n)); };
-      sub(-X1, -Y1, X1, -Y1); sub(X1, -Y1, X1, Y1); sub(X1, Y1, -X1, Y1); sub(-X1, Y1, -X1, -Y1);
-      const outer = new THREE.Shape(outerPts);
+      // The outside of the table is rounded: corners with radius RC seen from above, and a rounded top edge (a
+      // bull-nose of radius RN) all round. The flat rail top stops RN short of the outer edge, where the bull-nose
+      // takes over; a skirt below it carries the outer face down to the apron.
+      const RC = 0.07, RN = 0.022;
+      const rrPts = (hw, hh, rc, step = 0.05) => {        // rounded rectangle, counter-clockwise, densely subdivided
+        const pts = [], seg = (ax, ay, bx, by) => { const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / step)); for (let i = 0; i < n; i++) pts.push(new THREE.Vector2(ax + (bx - ax) * i / n, ay + (by - ay) * i / n)); };
+        const arc = (cx, cy, a0) => { for (let k = 0; k < 10; k++) { const a = a0 + (Math.PI / 2) * k / 10; pts.push(new THREE.Vector2(cx + rc * Math.cos(a), cy + rc * Math.sin(a))); } };
+        seg(-hw + rc, -hh, hw - rc, -hh); arc(hw - rc, -hh + rc, -Math.PI / 2);
+        seg(hw, -hh + rc, hw, hh - rc); arc(hw - rc, hh - rc, 0);
+        seg(hw - rc, hh, -hw + rc, hh); arc(-hw + rc, hh - rc, Math.PI / 2);
+        seg(-hw, hh - rc, -hw, -hh + rc); arc(-hw + rc, -hh + rc, Math.PI);
+        return pts;
+      };
+      const outer = new THREE.Shape(rrPts(X1 - RN, Y1 - RN, RC - RN));
       const ring = [], step = 0.004;
       // Walk the rectangle counter-clockwise. A point that falls inside a pocket circle is pushed outward along the
       // edge normal onto the far side of the circle; between consecutive points on the same circle the arc is filled
@@ -190,10 +200,23 @@ window.QB = window.QB || {};
       }
       const rail = new THREE.Mesh(railGeo, [woodMat, darkMat]);
       rail.receiveShadow = true; S.add(rail);
-      // apron (the table's wooden body) below the rail; its top sits just below the pocket cups
-      const apronMat = new THREE.MeshPhysicalMaterial({ map: tex(QB.Tex.wood(), 3, 0.25), color: 0xb89a88, roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.35 });
-      const apron = new THREE.Mesh(new THREE.BoxGeometry(2 * X1, 2 * Y1, 0.18), apronMat);
-      apron.position.z = -0.075 - 0.09; apron.castShadow = true; S.add(apron);
+      // skirt: the outer face of the rails, from the apron up to where the bull-nose starts
+      const skirtSh = new THREE.Shape(rrPts(X1, Y1, RC)); skirtSh.holes.push(new THREE.Path(rrPts(X1 - RN, Y1 - RN, RC - RN).reverse()));
+      const skirtGeo = new THREE.ExtrudeGeometry(skirtSh, { depth: RAIL_H - RN + 0.08, bevelEnabled: false, curveSegments: 4 }); skirtGeo.translate(0, 0, -0.08);
+      const skirt = new THREE.Mesh(skirtGeo, woodMat); skirt.receiveShadow = true; S.add(skirt);
+      // bull-nose: a rounded wooden edge swept all round the top outer edge (grain along it)
+      const nosePath = new THREE.CatmullRomCurve3(rrPts(X1 - RN, Y1 - RN, RC - RN, 0.03).map(v => new THREE.Vector3(v.x, v.y, RAIL_H - RN)), true);
+      const noseLen = nosePath.getLength();
+      const noseTex = tex(QB.Tex.wood(), noseLen, 0.25);
+      const bull = new THREE.Mesh(new THREE.TubeGeometry(nosePath, 600, RN, 14, true),
+        new THREE.MeshPhysicalMaterial({ map: noseTex, roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.25 }));
+      bull.receiveShadow = true; S.add(bull);
+      // apron (the table's wooden body) below the rail, rounded like the rails; its top sits just below the pocket cups
+      const apronMat = new THREE.MeshPhysicalMaterial({ map: tex(QB.Tex.wood(), 1, 4), color: 0xb89a88, roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.35 });
+      const apronGeo = new THREE.ExtrudeGeometry(new THREE.Shape(rrPts(X1 - 0.012, Y1 - 0.012, RC - 0.012)),
+        { depth: 0.156, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 4, curveSegments: 4 });
+      const apron = new THREE.Mesh(apronGeo, apronMat);
+      apron.position.z = -0.255 + 0.012; apron.castShadow = true; S.add(apron);
       // ---- the room: the cloth is 77 cm above the floor ----
       const FLOOR = -0.77, apronBottom = -0.255;
       // six turned legs (corners and the middle of the long sides), grain running along the leg
@@ -457,11 +480,12 @@ window.QB = window.QB || {};
       this.scene.add(this.ghost);
       // where the tip will hit the cue ball: a small, thin red "+" (about 6 mm across, 0.5 mm lines) painted on a
       // thin cap that sits on the ball surface
-      const TH = 0.12, cw = 512, ch = 128, cvm = document.createElement('canvas'); cvm.width = cw; cvm.height = ch;
+      // (arms reach 11 mm, past the 6.5 mm cue tip, so the ends show even with the tip right at the ball)
+      const TH = 0.42, cw = 512, ch = 256, cvm = document.createElement('canvas'); cvm.width = cw; cvm.height = ch;
       const gm = cvm.getContext('2d');
       gm.fillStyle = 'rgba(230,30,35,0.85)';
       gm.fillRect(0, 0, cw, Math.max(1, 0.0003 / R / TH * ch));                              // joins the arms at the centre
-      for (let y = 0; y < (0.003 / R) / TH * ch; y++) {                                        // four arms, 3 mm each
+      for (let y = 0; y < (0.011 / R) / TH * ch; y++) {                                        // four arms, 11 mm each
         const th = Math.max(0.004, (y + 0.5) / ch * TH), half = Math.min(cw / 8, ((0.00025 / R) / Math.sin(th)) / (2 * Math.PI) * cw);
         for (const x0 of [0, cw / 4, cw / 2, 3 * cw / 4, cw]) gm.fillRect(x0 - half, y, 2 * half, 1);
       }
@@ -500,7 +524,7 @@ window.QB = window.QB || {};
     // eye closer and lower (more level, like getting down on the shot), zooming out stands you up
     // z = 0: down on the shot, eye ~62 cm behind the cue ball (chin over the cue, more of the stick in view)
     // z = 1: standing, eye ~0.86 m above the cloth
-    get dist() { return 0.62 + 0.70 * this.z; }
+    get dist() { return 0.62 + (this.aimBack !== undefined ? this.aimBack : 0.22) + 0.70 * this.z; }    // aimBack: extra set-back (default 22 cm; test mode slider)
     get height() { return 0.14 + 0.72 * Math.pow(this.z, 1.5); }
     zoom(deltaY) { this.z = Math.min(1, Math.max(0, this.z + deltaY * 0.0008)); }
     setGrid(on) { if (this.gridGroup) this.gridGroup.visible = !!on; }
@@ -682,9 +706,13 @@ window.QB = window.QB || {};
     }
 
     // high view from behind the shot line that shows the whole table (farther back in a narrow window)
-    overviewPose(aim) {
+    // overview after the shot: high up behind the shot, on the cue line `back` metres behind where the cue ball was
+    // (near the end of the cue), looking across the table. back / height can be tuned in test mode.
+    overviewPose(aim, from, back = 1.8, height = 0.9) {
       const dx = Math.cos(aim), dy = Math.sin(aim), k = Math.max(1, 1.45 / (this.camera.aspect || 1.6)) * Math.max(0.8, C.TABLE_L / 2.54);
-      return { eye: [-dx * 2.6 * k, -dy * 2.6 * k, 2.2 * k], target: [-dx * 0.2, -dy * 0.2, 0] };
+      const fx = from ? from.x : 0, fy = from ? from.y : 0;
+      return { eye: [fx - dx * back * k, fy - dy * back * k, height * k],
+        target: [0.5 * (fx + dx * 1.0), 0.5 * (fy + dy * 1.0), 0] };    // between the shot line and the table centre
     }
     freeze(pose) { this.frozen = pose; }
     unfreeze() { this.frozen = null; }
@@ -715,7 +743,7 @@ window.QB = window.QB || {};
       let pose = this.walk ? this.walkPose() : this.frozen || (cue.onTable ? this.poseFor(cue, st.aimAngle, st.elev || 0) : this.lastPose);
       // after the shot: pull back to an overview of the whole table (from the shooter's side) while the balls roll
       const over = !!st.overview && !this.walk;
-      if (over) pose = this.overviewPose(st.aimAngle);
+      if (over) pose = st.shotCue ? this.overviewPose(st.shotCue.aim, st.shotCue, st.ovBack, st.ovHeight) : this.overviewPose(st.aimAngle);
       if (this._wasOver !== undefined && over !== this._wasOver && this.lastPose) this.trans = { from: this.lastPose, t: 0, dur: over ? 0.9 : 0.6 };
       this._wasOver = over;
       // standing up / going back to the shot: blend the camera over ~0.4 s instead of jumping
@@ -799,7 +827,7 @@ window.QB = window.QB || {};
       }
       // cue stick
       // while walking the cue "walks with you": carried see-through at your side, pointing the way you look
-      this.cue.visible = !!st.showCue && cue.onTable;
+      this.cue.visible = (!!st.showCue && cue.onTable) || !!st.shotCue;   // after the shot the cue stays where it was
       const ghost = !!this.walk;
       if (this.cue.userData.ghost !== ghost) {
         this.cue.userData.ghost = ghost;
@@ -810,19 +838,21 @@ window.QB = window.QB || {};
         this.cue.position.set(...W.tip);
         this.cue.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...W.toButt));
       } else if (this.cue.visible) {
-        const th = st.elev || 0, ce = Math.cos(th), se = Math.sin(th);
-        const dx = Math.cos(st.aimAngle), dy = Math.sin(st.aimAngle);
-        let tx = st.tipX, ty = st.tipY; const rr = Math.hypot(tx, ty);
+        // the cue at the ball (or, while the balls roll, where the shot was played: st.shotCue)
+        const Q = st.shotCue || { x: cue.x, y: cue.y, aim: st.aimAngle, elev: st.elev || 0, tipX: st.tipX, tipY: st.tipY, pull: st.pull || 0 };
+        const th = Q.elev || 0, ce = Math.cos(th), se = Math.sin(th);
+        const dx = Math.cos(Q.aim), dy = Math.sin(Q.aim);
+        let tx = Q.tipX, ty = Q.tipY; const rr = Math.hypot(tx, ty);
         if (rr > C.TIP_MAX) { tx *= C.TIP_MAX / rr; ty *= C.TIP_MAX / rr; }
         const a = tx * R, b = ty * R, c = R * Math.sqrt(Math.max(0, 1 - tx * tx - ty * ty));
         const e = [ce * dx, ce * dy, -se], rv = [dy, -dx, 0], uv = [se * dx, se * dy, ce];
-        const gap = 0.006 + (st.pull || 0);
+        const gap = 0.006 + (Q.pull || 0);
         const P = [0, 1, 2].map(i => a * rv[i] + b * uv[i] - c * e[i] - gap * e[i]);
-        this.cue.position.set(cue.x + P[0], cue.y + P[1], R + P[2]);
+        this.cue.position.set(Q.x + P[0], Q.y + P[1], R + P[2]);
         this.cue.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-e[0], -e[1], -e[2]));
         // tip contact point on the ball surface: n = (a·r + b·u − c·e) / R; the cap's axis points along n,
         // with the cross arms along the cue's right / up directions
-        if (st.showTipMark) {
+        if (st.showTipMark && !st.shotCue) {
           const n = new THREE.Vector3(...[0, 1, 2].map(i => a * rv[i] + b * uv[i] - c * e[i])).normalize();
           const right = new THREE.Vector3(...rv); right.addScaledVector(n, -right.dot(n)).normalize();
           const zAx = new THREE.Vector3().crossVectors(right, n);

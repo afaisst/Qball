@@ -30,8 +30,8 @@ To host it, any static web host works. For example, turn on **GitHub Pages** (Se
 - **Lessons:** step-by-step introductions with explanations (Lesson 1: the stop shot).
 - **Drills:** Billiard University–style target drills with level progression and scoring, and pattern drills (L-drill, line-ups, rail balls, diamond grid, Dr. Dave's 3-ball drill, random layouts, play the ghost).
 - **Free ball placement:** build any position from all 15 balls.
-- **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table. Balls have a satin finish with light wear (faint chalk marks and scuffs), the cloth has a felt texture with a faint nap and light wear along the break lane, the cushions have a real profile (rounded nose, face slanting back under it, curved jaws at the pockets), the rails are grained wood, and the table stands on six turned legs on a patterned rug in a wood-panelled room with paintings by Swiss artists in gilded frames and a door left slightly ajar, lit by a three-shade billiard lamp whose spotlights give each ball its soft shadows (all textures are generated in the browser, `js/textures.js`). Pocketed balls don't just vanish: they drop into the pocket, rattle off its wall (a slow ball circles the rim), bounce on the bottom and settle in the pocket (several balls stack up in the same pocket). They stay there until they are re-spotted or re-racked (a visual animation; the physics and rules count the ball as pocketed the moment its centre crosses the drop line). After a shot the 3D camera pulls back to an overview of the whole table while the balls roll, then returns to your aiming view (can be turned off in Settings).
-- **Settings** (⚙ in the top bar; remembered): realistic shadows from the three lamps (or one light from above), the post-shot overview, and **aiming aids** (each can be turned off): aim line, ghost ball, a red cross on the cue ball where the tip will hit (3D), an **eclipse view** (a small inset looking exactly along the cue line: the cue ball's outline over the object ball shows the ball fraction, e.g. 50% for a half-ball hit), object-ball path, cue-ball path (after hitting a ball or a cushion), tangent line, ball trails, practice markings.
+- **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table. Balls have a satin finish with light wear (faint chalk marks and scuffs), the cloth has a felt texture with a faint nap and light wear along the break lane, the cushions have a real profile (rounded nose, face slanting back under it, curved jaws at the pockets), the rails are grained wood, and the table stands on six turned legs on a patterned rug in a wood-panelled room with paintings by Swiss artists in gilded frames and a door left slightly ajar, lit by a three-shade billiard lamp whose spotlights give each ball its soft shadows (all textures are generated in the browser, `js/textures.js`). Pocketed balls don't just vanish: they drop into the pocket, rattle off its wall (a slow ball circles the rim), bounce on the bottom and settle in the pocket (several balls stack up in the same pocket). They stay there until they are re-spotted or re-racked (a visual animation; the physics and rules count the ball as pocketed the moment its centre crosses the drop line). After a shot the 3D camera pulls back to an overview while the balls roll — high up on the shot line behind where the cue ball was, near the end of the cue, which stays where the shot was played — then returns to your aiming view (can be turned off in Settings).
+- **Settings** (⚙ in the top bar; remembered): realistic shadows from the three lamps (or one light from above), the post-shot overview, and **aiming aids** (each can be turned off): aim line, ghost ball, a red cross on the cue ball where the tip will hit (3D), an **eclipse view** (a small inset looking exactly along the cue line: the cue ball's outline over the object ball shows the ball fraction, e.g. 50% for a half-ball hit; move it by the ✥ grip in its corner), object-ball path, cue-ball path (after hitting a ball or a cushion), tangent line, ball trails, practice markings.
 - **Test mode** for physics experiments: exact inputs, sliders for every physics parameter, shot reports, replay, slow motion, and copy/paste of complete shots as JSON.
 
 ## How to play
@@ -52,6 +52,7 @@ Choose a **9 ft** (tournament, 100" × 50" playing surface; the default), **8 ft
 | View | 2D / Split / 3D in the top bar. <kbd>V</kbd> cycles; the choice is remembered. |
 | Test mode | The small *test mode* link at the bottom right, or <kbd>T</kbd>. |
 | Help | **? Help** in the top bar (or <kbd>?</kbd>) shows all the controls. |
+| Move panels | Drag the ✥ in the corner of the mini map, the eclipse view or a pop-up; double-click it to put it back. |
 
 ### Touch screens (iPad, tablets)
 
@@ -102,7 +103,7 @@ Draw shots and raised-cue shots leave a small chalk mark on the cloth, like on a
 - Drag any ball (<kbd>Shift</kbd> or *Move balls*), or type exact positions in meters.
 - **Shoot precisely:** aim angle, cue speed (m/s), tip offset, elevation, or an exact cut angle (*Set cut*). <kbd>Enter</kbd> shoots, <kbd>R</kbd> replays the identical shot, <kbd>X</kbd> stops all balls.
 - **Physics sliders** for every parameter below, plus a choice of cushion model.
-- **Shot report** (cut angle, departure angles, speeds), live ball state (sliding/rolling, ω), trails, contact positions, full-physics path preview, and slow motion.
+- **Shot report** (cut angle, departure angles, speeds), live ball state (sliding/rolling, ω), trails, contact positions, full-physics path preview, and slow motion, and the 3D overview camera's set-back and height.
 - **Share a shot:** *Copy last shot* puts the full shot on the clipboard as JSON: positions, aim, speed, tip, elevation and all physics settings. *Load shot…* sets it up again, and `node test/replay_shot.js shot.json` replays it in the terminal.
 
 ## Physics model
@@ -176,7 +177,7 @@ js/art.js           the paintings (generated by tools/embed-art.js from assets/a
 tools/embed-art.js  packs assets/art/*.jpg into js/art.js
 js/setups.js        game racks and drill definitions
 js/lessons.js       lessons: setups, limits, steps and texts
-js/audio.js         sounds (Web Audio, generated)
+js/audio.js         sounds, synthesized in the browser (Web Audio): ball clacks, cue tip, cushion thuds, pocket drops, a soft cloth rumble
 js/main.js          input, game and drill logic, UI
 js/vendor/          three.js r149 (MIT license)
 test/               command-line physics tests (Node.js)
