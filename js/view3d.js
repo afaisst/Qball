@@ -235,29 +235,76 @@ window.QB = window.QB || {};
       S.add(this.gridGroup);
 
       // wooden floor, a rug under the table, and walls with wood panelling and wallpaper
-      const floorMat = new THREE.MeshStandardMaterial({ map: tex(QB.Tex.floorboards(), 5, 5), color: 0x9a8a7c, roughness: 0.6 });
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), floorMat);
+      const floorMat = new THREE.MeshStandardMaterial({ map: tex(QB.Tex.floorboards(), 4.4, 3.4), color: 0x9a8a7c, roughness: 0.6 });
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(8.8, 6.8), floorMat);          // exactly the room (walls at ±4.4, ±3.4)
       floor.position.z = FLOOR; floor.receiveShadow = true; S.add(floor);
       const rugMat = new THREE.MeshStandardMaterial({ map: tex(QB.Tex.rug()), roughness: 1 });
       const rugMesh = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.34), rugMat);
       rugMesh.position.z = FLOOR + 0.004; rugMesh.receiveShadow = true; S.add(rugMesh);
       const RX = 4.4, RY = 3.4, WALL_H = 3.0, WAIN = 0.85;             // room half-size (walls), wall height, panelling height
       const paper = tex(QB.Tex.wallpaper(), 1, 1), panelTex = tex(QB.Tex.wood(), 1, 1);
-      const wall = (cx, cy, len, rot) => {
+      // a wall: wallpaper above wood panelling, chair rail and baseboard; `hole` = a door opening {a, b, top}
+      // (local x range along the wall and height). The planes face local −y; each wall is turned to face the table.
+      const trimMat = new THREE.MeshStandardMaterial({ color: 0x3a1d0e, roughness: 0.5 });
+      const wall = (cx, cy, len, rot, hole) => {
         const grp = new THREE.Group(); grp.position.set(cx, cy, FLOOR); grp.rotation.z = rot;
-        const pt = paper.clone(); pt.needsUpdate = true; pt.repeat.set(len / 0.5, (WALL_H - WAIN) / 0.5);
-        const up = new THREE.Mesh(new THREE.PlaneGeometry(len, WALL_H - WAIN), new THREE.MeshStandardMaterial({ map: pt, roughness: 0.9 }));
-        up.rotation.x = Math.PI / 2; up.position.set(0, 0, WAIN + (WALL_H - WAIN) / 2); grp.add(up);
-        const wt = panelTex.clone(); wt.needsUpdate = true; wt.repeat.set(len / 1.0, WAIN);
-        const low = new THREE.Mesh(new THREE.PlaneGeometry(len, WAIN), new THREE.MeshStandardMaterial({ map: wt, color: 0x8a6e5c, roughness: 0.55 }));
-        low.rotation.x = Math.PI / 2; low.position.set(0, 0, WAIN / 2); grp.add(low);
-        const trimMat = new THREE.MeshStandardMaterial({ color: 0x3a1d0e, roughness: 0.5 });
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.06), trimMat); rail.position.set(0, -0.02, WAIN); grp.add(rail);
-        const base = new THREE.Mesh(new THREE.BoxGeometry(len, 0.03, 0.12), trimMat); base.position.set(0, -0.015, 0.06); grp.add(base);
+        const L0 = -len / 2, L1 = len / 2;
+        const panel = (x0, x1, z0, z1, src, tile, zRef, color, rough) => {     // texture stays continuous across pieces
+          const t = src.clone(); t.needsUpdate = true;
+          t.repeat.set((x1 - x0) / tile, (z1 - z0) / tile); t.offset.set((x0 - L0) / tile, (z0 - zRef) / tile);
+          const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshStandardMaterial({ map: t, color, roughness: rough }));
+          m.rotation.x = Math.PI / 2; m.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2); grp.add(m);
+        };
+        const spans = hole ? [[L0, hole.a], [hole.b, L1]] : [[L0, L1]];
+        for (const [x0, x1] of spans) {
+          panel(x0, x1, WAIN, WALL_H, paper, 0.5, WAIN, 0xffffff, 0.9);
+          panel(x0, x1, 0, WAIN, panelTex, 1.0, 0, 0x8a6e5c, 0.55);
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.04, 0.06), trimMat); rail.position.set((x0 + x1) / 2, -0.02, WAIN); grp.add(rail);
+          const base = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.03, 0.12), trimMat); base.position.set((x0 + x1) / 2, -0.015, 0.06); grp.add(base);
+        }
+        if (hole) panel(hole.a, hole.b, hole.top, WALL_H, paper, 0.5, WAIN, 0xffffff, 0.9);   // above the door
         S.add(grp);
+        return grp;
       };
-      // a wall's planes face local −y; each wall is turned to face the table
-      wall(0, -RY, 2 * RX, Math.PI); wall(0, RY, 2 * RX, 0); wall(-RX, 0, 2 * RY, Math.PI / 2); wall(RX, 0, 2 * RY, -Math.PI / 2);
+      // a panelled door, hinged on the corner side and standing ~10 cm ajar into the room; a dim hallway behind it
+      const door = (grp, hole) => {
+        const w = hole.b - hole.a, h = hole.top;
+        const hall = new THREE.Mesh(new THREE.BoxGeometry(w + 1.4, 1.8, 2.6), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide }));
+        hall.position.set((hole.a + hole.b) / 2, 0.9 + 0.002, 1.3 - 0.002); grp.add(hall);  // dark space behind the wall (local +y)
+        const cas = (sx, sz, x, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.035, sz), trimMat); m.position.set(x, -0.017, z); grp.add(m); };
+        cas(0.08, h + 0.08, hole.a - 0.04, (h + 0.08) / 2); cas(0.08, h + 0.08, hole.b + 0.04, (h + 0.08) / 2); cas(w + 0.16, 0.08, (hole.a + hole.b) / 2, h + 0.04);
+        const dTex = panelTex.clone(); dTex.needsUpdate = true; dTex.center.set(0.5, 0.5); dTex.rotation = Math.PI / 2; dTex.repeat.set(2.0, 0.9);
+        const dMat = new THREE.MeshStandardMaterial({ map: dTex, color: 0xa07e64, roughness: 0.5 });
+        const pivot = new THREE.Group(); pivot.position.set(hole.b - 0.005, -0.02, 0); grp.add(pivot);
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(w - 0.01, 0.04, h - 0.01), dMat); leaf.position.set(-(w - 0.01) / 2, 0, (h - 0.01) / 2); pivot.add(leaf);
+        for (const side of [-1, 1]) {                                                    // raised panels on both faces
+          for (const [col, row] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+            const pw = (w - 0.3) / 2, ph = row ? 0.95 : 0.75, px = -(w - 0.01) + 0.11 + col * (pw + 0.07) + pw / 2, pz = row ? 1.0 + 0.1 + ph / 2 : 0.12 + ph / 2;
+            const pn = new THREE.Mesh(new THREE.BoxGeometry(pw, 0.012, ph), dMat); pn.position.set(px, side * 0.024, pz); pivot.add(pn);
+          }
+        }
+        const brass = new THREE.MeshStandardMaterial({ color: 0xc9a24a, roughness: 0.3, metalness: 0.8 });
+        for (const side of [-1, 1]) {                                                    // knobs on both sides
+          const knob = new THREE.Mesh(new THREE.SphereGeometry(0.028, 16, 12), brass); knob.position.set(-(w - 0.01) + 0.07, side * 0.065, 1.0); pivot.add(knob);
+          const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.012, 0.045, 10), brass); neck.position.set(-(w - 0.01) + 0.07, side * 0.035, 1.0); pivot.add(neck);
+        }
+        pivot.rotation.z = Math.asin(0.10 / (w - 0.01));                                  // ajar: the latch edge 10 cm into the room
+        // door stop: a brass spring stop with a rubber tip on the corner wall's baseboard, where the door would
+        // otherwise hit the wall (it catches the door at about 100° open)
+        const sw = w - 0.01, stopY = -sw * Math.sin(100 * Math.PI / 180) - 0.02, wallX = RX;   // (this wall's local x = world x)
+        const rubber = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+        const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.008, 16), brass);
+        plate.rotation.z = Math.PI / 2; plate.position.set(wallX - 0.034, stopY, 0.085); grp.add(plate);   // on the baseboard
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.008, 0.07, 10), brass);
+        rod.rotation.z = Math.PI / 2; rod.position.set(wallX - 0.034 - 0.035, stopY, 0.085); grp.add(rod);
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.014, 14, 10), rubber);
+        tip.scale.set(1.2, 1, 1); tip.position.set(wallX - 0.034 - 0.075, stopY, 0.085); grp.add(tip);
+      };
+      wall(0, -RY, 2 * RX, Math.PI);
+      // the door: in the corner next to Böcklin's painting (north wall, near the foot-end corner)
+      const dHole = { a: RX - 1.15, b: RX - 0.25, top: 2.05 };
+      door(wall(0, RY, 2 * RX, 0, dHole), dHole);
+      wall(-RX, 0, 2 * RY, Math.PI / 2); wall(RX, 0, 2 * RY, -Math.PI / 2);
       this.buildArt(FLOOR, RX, RY);
     }
 
