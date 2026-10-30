@@ -1045,6 +1045,16 @@
     for (const el of settingInputs()) if (vals[el.id] !== undefined && el.checked !== !!vals[el.id]) { el.checked = !!vals[el.id]; el.dispatchEvent(new Event('change')); }
   }
   $('btnSettings').onclick = () => { settingsBox.hidden = false; };
+  // Help: the controls, in a pop-up (button in the top bar, or the ? key)
+  const helpBox = $('helpModal');
+  $('btnHelp').onclick = () => { helpBox.hidden = false; };
+  $('btnHelpClose').onclick = () => { helpBox.hidden = true; };
+  helpBox.addEventListener('click', (ev) => { if (ev.target === helpBox) helpBox.hidden = true; });
+  window.addEventListener('keydown', (ev) => {
+    if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA') return;
+    if (ev.key === 'Escape' && !helpBox.hidden) helpBox.hidden = true;
+    else if (ev.key === '?') helpBox.hidden = !helpBox.hidden;
+  });
   $('btnSettingsClose').onclick = () => { settingsBox.hidden = true; };
   $('btnSettingsDefaults').onclick = () => { applySettings(settingDefaults); saveSettings(); };
   settingsBox.addEventListener('click', (ev) => { if (ev.target === settingsBox) settingsBox.hidden = true; });   // click outside
@@ -1554,6 +1564,7 @@
     $('btnSwap').hidden = v !== 'split';
     $('btnMap').hidden = v !== '3d';
     $('btnWalk').hidden = v !== '3d';
+    $('sec3d').hidden = v !== '3d';                // Walk / Map buttons in the panel (3D-only view)
     try { localStorage.setItem('qball.view', v); } catch (e) { /* ignore */ }
     S.mapShown = null;   // force a layout refresh
     setTimeout(onResize, 0);

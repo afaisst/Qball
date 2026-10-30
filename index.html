@@ -30,6 +30,7 @@
       <select id="selTable"><option value="9">9 ft</option><option value="8">8 ft</option><option value="7">7 ft</option></select></label>
     <span id="testBadge" class="badge" hidden>TEST MODE</span>
     <div id="status" class="status"></div>
+    <button id="btnHelp" class="hdrbtn" title="Controls and help (?)">? Help</button>
     <button id="btnSettings" class="hdrbtn" title="Aiming aids, 3D view and other settings">⚙ Settings</button>
     <button id="btnTouch" class="toggle" title="Touch mode: aim by dragging and shoot with the pull-down cue on the side (like on a tablet)">👆 Touch mode</button>
     <label class="chk small"><input type="checkbox" id="optSound" checked> Sound</label>
@@ -44,8 +45,6 @@
         <div class="vbar">
           <span class="vtitle">Cue view</span>
           <span class="vhint">drag ↔ to aim (Shift: fine) · pull the cue on the right ↓ and release to shoot · wheel: zoom</span>
-          <button id="btnWalk" class="mini toggle" title="Stand up and walk around the table (move the blue dot on the map, drag the view to look around)" hidden>🚶 walk</button>
-          <button id="btnMap" class="mini toggle" title="Show the small top-view map" hidden>🗺 map</button>
           <button id="btnSwap" class="mini" title="Swap the two views">⇄ swap</button>
           <button id="btnHide3d" class="mini" title="Hide the cue view">✕</button>
         </div>
@@ -97,6 +96,14 @@
           <button id="btnHarder" class="drill-only" hidden title="Go up one level">harder ▶</button>
           <button id="btnArrange" class="toggle place-only" hidden title="Arrange mode: drag any ball; off = shoot">✋ Arrange balls (M)</button>
           <button id="btnRestoreSetup" class="place-only" hidden title="Put the balls back where they were before the last shot">↺ Last setup</button>
+        </div>
+      </section>
+
+      <section id="sec3d" hidden>
+        <h2>3D view</h2>
+        <div class="bigbtns">
+          <button id="btnWalk" class="big toggle" title="Stand up and walk around the table: move with the blue dot on the map, turn with the view cone">🚶 Walk</button>
+          <button id="btnMap" class="big toggle" title="Show the small top-view map">🗺 Map</button>
         </div>
       </section>
 
@@ -195,9 +202,12 @@
         </section>
       </div>
 
-      <section class="help">
-        <h2>Controls</h2>
-        <ul>
+    </aside>
+  </main>
+  <a id="lnkTest" class="testlink" href="#" title="Physics test mode (T)">test mode</a>
+  <div id="helpModal" hidden><div class="lbox">
+    <h2>Help · controls</h2>
+    <ul>
           <li><b>Aim:</b> move the mouse · <b>click</b> to freeze the aim (click again to release) · <kbd>←</kbd><kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine) · <kbd>Space</kbd> lock aim</li>
           <li><b>Shoot:</b> press anywhere, drag back, release · <kbd>Esc</kbd> cancels</li>
           <li><b>Touch (iPad / tablet, or the 👆 Touch mode button):</b> drag a finger on the table to aim; start the drag on the cue ball for fine aiming. Shoot with the cue on the right: pull it down and let go. In 3D, drag to aim and pinch to zoom; double-tap the map to return to your shot.</li>
@@ -205,13 +215,12 @@
           <li><b>Cue elevation:</b> drag the side view, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower</li>
           <li><b>Ball in hand:</b> drag the cue ball where you want it</li>
           <li><b>View</b> (top bar): 2D, split or 3D only · <kbd>V</kbd> cycles</li>
-          <li><b>Walk around</b> (3D only): press <b>🚶 walk</b>, or keep zooming out once you're standing. On the map, drag the blue dot to move (or click where to go — you walk around the table) and drag the blue view cone, or the crosshair itself (it snaps onto balls), to pick a spot on the table to look at — you keep facing it as you walk. Or double-click (double-tap) a ball or spot in the 3D view. The wheel (or a pinch) on the 3D view bends you down. The cue walks with you (shown see-through): press walk again, double-click the map or pick up the cue to go back to your shot, aiming the way you face. Drag the map by its ✥ grip.</li>
+          <li><b>Walk around</b> (3D only): press <b>🚶 Walk</b> (right panel), or keep zooming out once you're standing. On the map, drag the blue dot to move (or click where to go — you walk around the table) and drag the blue view cone, or the crosshair itself (it snaps onto balls), to pick a spot on the table to look at — you keep facing it as you walk. Or double-click (double-tap) a ball or spot in the 3D view. The wheel (or a pinch) on the 3D view bends you down. The cue walks with you (shown see-through): press walk again, double-click the map or pick up the cue to go back to your shot, aiming the way you face. Drag the map by its ✥ grip.</li>
           <li><b>Cue view:</b> drag ↔ to aim, pull the side cue ↓ and release to shoot · wheel: zoom (in = down on the shot, out = standing up)</li>
         </ul>
-      </section>
-    </aside>
-  </main>
-  <a id="lnkTest" class="testlink" href="#" title="Physics test mode (T)">test mode</a>
+    <p class="note">Settings (⚙) has the aiming aids and display options; Lessons, Games and Drills are in the tabs at the top. The test mode link (bottom right, or <kbd>T</kbd>) opens the physics tools.</p>
+    <div class="lbtns"><button id="btnHelpClose" class="primary">Close</button></div>
+  </div></div>
   <div id="settingsModal" hidden><div class="lbox">
     <h2>Settings</h2>
     <div class="sgrid">
