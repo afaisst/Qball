@@ -27,7 +27,7 @@ To host it, any static web host works. For example, turn on **GitHub Pages** (Se
 - **Spin and elevation:** pick the tip contact point on a cue-ball diagram and raise the cue butt on a side view. Hitting outside the dashed ring is a miscue.
 - **Rail clearance:** within 20 cm of a cushion, the cue has to pass over the rail. The part of the cue ball you can't reach is shaded red, and raising the cue shrinks it. When the cue lies over a pocket, there's no cushion under it, so the obstacle is the rail behind the hole: farther back, which frees up draw shots.
 - **Games:** 8-, 9- and 10-ball racks plus free practice. 9-ball and 10-ball use (simplified) foul rules with ball in hand.
-- **Lessons:** step-by-step introductions with explanations (Lesson 1: the stop shot).
+- **Lessons:** step-by-step introductions with explanations and camera moves (Lesson 1: aiming with the ghost ball, Lesson 2: the stop shot).
 - **Drills:** Billiard University–style target drills with level progression and scoring, and pattern drills (L-drill, line-ups, rail balls, diamond grid, Dr. Dave's 3-ball drill, random layouts, play the ghost).
 - **Free ball placement:** build any position from all 15 balls.
 - **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table. Balls have a satin finish with light wear (faint chalk marks and scuffs), the cloth has a felt texture with a faint nap and light wear along the break lane, the cushions have a real profile (rounded nose, face slanting back under it, curved jaws at the pockets), the rails are grained wood, and the table stands on six turned legs on a patterned rug in a wood-panelled room with paintings by Swiss artists in gilded frames and a door left slightly ajar, lit by a three-shade billiard lamp whose spotlights give each ball its soft shadows (all textures are generated in the browser, `js/textures.js`). Pocketed balls don't just vanish: they drop into the pocket, rattle off its wall (a slow ball circles the rim), bounce on the bottom and settle in the pocket (several balls stack up in the same pocket). They stay there until they are re-spotted or re-racked (a visual animation; the physics and rules count the ball as pocketed the moment its centre crosses the drop line). After a shot the 3D camera pulls back to an overview while the balls roll — high up on the shot line behind where the cue ball was, near the end of the cue, which stays where the shot was played — then returns to your aiming view (can be turned off in Settings).
@@ -74,13 +74,17 @@ Touch is detected automatically. With a mouse, the **👆 Touch mode** button in
 
 ### Lessons
 
-Step-by-step introductions (the **Lessons** tab). Each lesson sets the balls up for you and limits what you can change, so it is about one thing at a time. Short pop-ups explain each step, the panel shows a strength meter (soft / medium / hard) and the result of every shot, and the balls are set up again after each shot. *Show the instructions* brings the current step's text back.
+Step-by-step introductions (the **Lessons** tab). Each lesson sets the balls up for you and limits what you can change, so it is about one thing at a time.
 
-- **Lesson 1 · The stop shot:** a straight shot into the side pocket with the aim fixed; you choose the strength and how low you hit the cue ball (on the vertical line through its centre, at or below it).
+- **Lesson 1 · Aiming with the ghost ball:** a lesson card on the table walks you through six set-ups with *Next* / *Back*. The 2D view zooms in on the ghost ball, the 3D camera moves behind the pocket line and along the cue line, a red dot marks the aiming point, and the eclipse inset shows how much of the object ball the cue ball covers.
+  1. *Straight shot*, then *10°*, *30°* and *50° cuts*: the ghost ball stays in the same place; the aiming point moves from the centre of the 9 to its edge (30°, half-ball) and into the air beside it (50°). After each explanation you take the shot (aim set, strength fixed: the 9 goes in).
+  2. *Your ghost ball* (twice, random cuts of 20–40°): with the aids off, you drag the ghost ball around the 9, confirm, aim at its centre in the 3D view and shoot. Afterwards the right spot is shown in green, with how far off your ghost ball and your aim were. A miss: place it again.
+  The panel lists the set-ups (click one to jump there); *Restart this set-up* starts the current one over.
+- **Lesson 2 · The stop shot:** short pop-ups explain each step, the panel shows a strength meter (soft / medium / hard) and the result of every shot, and the balls are set up again after each shot. *Show the instructions* brings the current step's text back. A straight shot into the side pocket with the aim fixed; you choose the strength and how low you hit the cue ball (on the vertical line through its centre, at or below it).
   1. *Center ball*, soft / medium / hard: soft follows, medium and hard stop (a sliding cue ball stops, a rolling one follows).
   2. *A little below center* (green marker): soft follows much less, medium stops dead, hard draws back.
 
-New lessons are defined in `js/lessons.js` (balls, limits, strength bands, steps and texts).
+Lesson scripts are written as text in `lessons/` (e.g. `lessons/lesson1.txt`) and turned into lesson definitions in `js/lessons.js`. The comment at the top of that file describes both kinds: practice lessons (balls, limits, strength bands, steps) and scripted lessons (set-ups made of beats: view, 2D zoom, 3D camera, aids, marks, and the player's task).
 
 ### Games
 
@@ -176,8 +180,9 @@ js/textures.js      procedural cloth, felt, wood, rug, floor and wallpaper textu
 js/art.js           the paintings (generated by tools/embed-art.js from assets/art/)
 tools/embed-art.js  packs assets/art/*.jpg into js/art.js
 js/setups.js        game racks and drill definitions
-js/lessons.js       lessons: setups, limits, steps and texts
-js/audio.js         sounds, synthesized in the browser (Web Audio): ball clacks, cue tip, cushion thuds, pocket drops, a soft cloth rumble
+js/lessons.js       lessons: setups, limits, steps, camera moves and texts
+lessons/            lesson scripts (plain text) the lessons are written from
+js/audio.js         sounds, synthesized in the browser (Web Audio): ball clacks, cue tip, cushion thuds, pocket drops, cloth rumble, room reverb
 js/main.js          input, game and drill logic, UI
 js/vendor/          three.js r149 (MIT license)
 test/               command-line physics tests (Node.js)

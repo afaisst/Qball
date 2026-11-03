@@ -1,0 +1,131 @@
+## Title
+Aiming with a ghost ball
+
+## Goals
+
+* learn a basic aiming system using a ghost ball
+
+
+## Script
+
+
+1. Explain the concept of a ghost ball: imagine a ball that sits touching next to the object ball. The ghost ball is on the line from object ball to pocket. Imagine that the cueball has to replace the object ball. Therefore you have to aim at the center of the ghost ball. Because balls are not point sources but extended, you don't aim at the object, but the aiming point is offset.
+
+2. Demonstrate the concept by a few shots.
+
+First set-up: straight shot ( o=Object ball, c=cueball)
+
+------------^------------
+|           o 	   	|
+|		   	|
+|	  	   	|
+|	    c	   	|
+|		   	|
+------------v------------
+
+* cueball 2/3 lower table, center line. 
+* object ball (number 9) upper 2/3 table, front of side pocket.
+* both balls are in line for a straight shot in. 
+* object ball is hit center (player cannot change)
+* ghost ball visible
+* predicted object ball line visible.
+* no tangent line
+* no cueball line after shot visible
+* aiming already set up (player cannot move/drag anything)
+
+- 2D view: Zoom in on Ghost ball, show line from ghost ball through object ball to pocket.
+- Switch to 3D view (about 30% tilt). Camera moves, shows object ball and ghost ball (viewing direction pocket). -> show how alignment is and note that the ghost ball needs to be replaced by cue ball. Note that because balls are extended, aiming point is the center of the ghost ball.
+- 3D view aligns with CB GB, OB, pocket. Say that in the case of a straight shot, the GB is in front of the OB, hence the CB hits center OB as seen from the CB.
+- let the player shoot (player drags shot, but the strength fixed is such that the OB goes in and the CB stops in front of the pocket) in 3D aim view. Zoom out
+
+Second set-up: 10deg angle.
+
+------------^------------
+|           o 	   	|
+|		   	|
+|	  	   	|
+|	   c	   	|
+|		   	|
+------------v------------
+
+* Else the same as first set-up. Aiming already set up (player cannot move/drag anything).
+
+- 2D view: zoom in on GB, show line from GB through object ball to pocket. Note that the GB is at the *same* location as before. Nothing changes here, just CB location changed.
+- Switch to 3D view. Again camera moves (~30% tilt), aligns with GB, OB, pocket.
+- Camera moves to align with CB, OB. Say that in this case, the shot is not straight anymore and we still aim at the GB center. But this time, the aiming point will be not the center of the OB, but offset. The offset is inside the rim of the OB.
+- Show the eclipse view to make the point above. Show where to aim for the OB. Note that it is difficult to aim for the OB.  Instead, it is easier to aim for the eclipse angle, meaning the slice of the GB covering the OB as seen from the CB.
+- Go in 3D aim view, keep eclipse view. Let player shoot (player drags shot, but the strength fixed is such that the OB goes in and the CB stops in front of the pocket). Zoom out
+
+
+Third set-up: 30deg angle
+
+------------^------------
+|           o 	   	|
+|		   	|
+|	  	   	|
+|	 c	   	|
+|		   	|
+------------v------------
+
+* Else the same as first set-up. Aiming already set up (player cannot move/drag anything).
+
+
+- 2D view: zoom in on GB, show line from GB through object ball to pocket. Note that the GB is at the *same* location as before. Nothing changes here, just CB location changed.
+- Switch to 3D view. Again camera moves (~30% tilt), aligns with GB, OB, pocket.
+- Camera moves to align with CB, OB. Say that in this case, the shot is not straight anymore and we still aim at the GB center. But this time, the aiming point will be not the center of the OB, but offset. A 30 degree angle is special because the aiming point is the rim of the OB. 
+- Show the eclipse view to make the point above. Show where to aim for the OB. Note that it is difficult to aim for the OB. Instead, it is easier to aim for the eclipse angle, meaning the slice of the GB covering the OB as seen from the CB.
+- Go in 3D aim view, keep eclipse view. Let player shoot (player drags shot, but the strength fixed is such that the OB goes in and the CB stops in front of the pocket). Zoom out
+
+
+Fourth set-up: 50 degrees angle
+
+
+------------^------------
+|           o 	   	|
+|		   	|
+|	  	   	|
+|     c	   	 	|
+|		   	|
+------------v------------
+
+* Else the same as first set-up. Aiming already set up (player cannot move/drag anything).
+
+- 2D view: zoom in on GB, show line from GB through object ball to pocket. Note that the GB is at the *same* location as before. Nothing changes here, just CB location changed.
+- Switch to 3D view. Again camera moves (~30% tilt), aligns with GB, OB, pocket.
+- Camera moves to align with CB, OB. Say that in this case, the shot is not straight anymore and we still aim at the GB center. But this time, the aiming point will be not the center of the OB, but offset. This time the aiming point is outside of the rim of the OB. This is especially difficult because the aiming point is in the air (literally). Here again it is easier to memorize or relate to the eclipse angle, meaning how much the GB covers the OB seen from the CB 
+- Show the eclipse view to make the point above. Show where to aim for the OB. Note that it is difficult to aim for the OB. Instead, it is easier to aim for the eclipse angle, meaning the slice of the GB covering the OB.
+- Go in 3D aim view, keep eclipse view. Let player shoot (player drags shot, but the strength fixed is such that the OB goes in and the CB stops in front of the pocket). Zoom out
+
+
+Fifth set-up: Random angle between 20-40 degrees.
+
+------------^------------
+|           o 	   	|
+|		   	|
+|	  	   	|
+|  c? c? c? 	 	|
+|		   	|
+------------v------------
+
+* Else the same as first set-up. Aiming already set up (player cannot move/drag anything).
+* but: GB view disabled. Only aiming line visible.
+
+Difference: the player first sets the GB themselves by dragging a white, transparent ball in 2D view where the ghost ball should be.
+- Player first is asked to drag the GB to the appropriate location.
+- confirmed, then GB is fixed.
+- go to 3D view, aiming mode.
+- player has to aim (on the ghost ball center)
+- player shoots (player drags shot, but the strength fixed is such that the OB goes in and the CB stops in front of the pocket).
+- if the player misses, set up the same again, but no GB. Player drags GB again, this set up starts again.
+
+Sixth set-up: same as Fifth set up but different angle. 
+
+
+## Summary:
+Summarize what we have learned:
+- ghost ball is a good aiming aid. Helps to visualize where player has to aim.
+- Aiming on a point of the ball is difficult, therefore try to match the eclipse angle, which is easier and more accurate
+- still need practice many balls to get good at angles.
+
+
+

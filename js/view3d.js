@@ -714,6 +714,13 @@ window.QB = window.QB || {};
       return { eye: [fx - dx * back * k, fy - dy * back * k, height * k],
         target: [0.5 * (fx + dx * 1.0), 0.5 * (fy + dy * 1.0), 0] };    // between the shot line and the table centre
     }
+    // lessons: a camera pose set by the script ({eye, target, fov}); null = back to the normal camera. The camera
+    // glides there over `dur` seconds.
+    setScripted(pose, dur = 1.3) {
+      const was = this.scripted;
+      this.scripted = pose || null;
+      if (this.lastPose && (was || pose)) this.trans = { from: this.lastPose, t: 0, dur };
+    }
     freeze(pose) { this.frozen = pose; }
     unfreeze() { this.frozen = null; }
     poseFor(cb, aim, elev = 0) {
@@ -740,7 +747,7 @@ window.QB = window.QB || {};
       // camera
       const now = performance.now(), dt = Math.min(0.05, (now - (this._t || now)) / 1000); this._t = now;
       if (this.walk) this.stepWalk(dt);
-      let pose = this.walk ? this.walkPose() : this.frozen || (cue.onTable ? this.poseFor(cue, st.aimAngle, st.elev || 0) : this.lastPose);
+      let pose = this.walk ? this.walkPose() : this.scripted || this.frozen || (cue.onTable ? this.poseFor(cue, st.aimAngle, st.elev || 0) : this.lastPose);
       // after the shot: pull back to an overview of the whole table (from the shooter's side) while the balls roll
       const over = !!st.overview && !this.walk;
       if (over) pose = st.shotCue ? this.overviewPose(st.shotCue.aim, st.shotCue, st.ovBack, st.ovHeight) : this.overviewPose(st.aimAngle);
@@ -760,13 +767,15 @@ window.QB = window.QB || {};
         else {
           const u = this.trans.t * this.trans.t * (3 - 2 * this.trans.t), f = this.trans.from;
           const mix = (a, b) => a.map((v, i) => v + (b[i] - v) * u);
-          pose = { eye: mix(f.eye, pose.eye), target: mix(f.target, pose.target) };
+          pose = { eye: mix(f.eye, pose.eye), target: mix(f.target, pose.target), fov: (f.fov || 42) + ((pose.fov || 42) - (f.fov || 42)) * u };
         }
       }
       if (pose) {
         this.lastPose = pose;
         this.camera.position.set(...pose.eye);
         this.camera.lookAt(...pose.target);
+        const fov = pose.fov || 42;
+        if (Math.abs(this.camera.fov - fov) > 1e-3) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
         if (this.lampGroup) this.lampGroup.visible = pose.eye[2] < 1.3;
       }
       // drop meshes of balls that are no longer in the world (new rack / drill)
@@ -870,7 +879,7 @@ window.QB = window.QB || {};
         const A = st.aim, z = 0.0015;
         setLine(this.aimLine, [cue.x, cue.y, z, A.gx, A.gy, z]);
         if (A.hit && A.hit.type === 'ball') {
-          setLine(this.obLine, [A.ob.x, A.ob.y, z, A.obEnd.x, A.obEnd.y, z]);
+          if (st.showObPath !== false) setLine(this.obLine, [A.ob.x, A.ob.y, z, A.obEnd.x, A.obEnd.y, z]);
           if (A.tangent && st.showTangent) setLine(this.tanLine, [A.gx, A.gy, z, A.gx + A.tangent.x * 0.3, A.gy + A.tangent.y * 0.3, z]);
         } else if (A.bounce && st.showBounce !== false) {    // cue ball off the cushion (part of the cue-ball path)
           setLine(this.obLine, [A.gx, A.gy, z, A.bounce.x, A.bounce.y, z]);
@@ -880,8 +889,47 @@ window.QB = window.QB || {};
           setLine(this.cbLine, pts);
         }
       }
+      this.lessonMarks(st.lesson);
       if (st.drawMain !== false) this.renderer.render(this.scene, this.camera);
       if (st.eclipse) this.renderEclipse(st);
+    }
+
+    // lesson overlays: guide lines (flat ribbons on the cloth, so they are thick enough to see), the aiming point
+    // (a red dot) and see-through balls (the ghost ball the player placed, the right answer)
+    // m = { lines: [{pts: [{x,y}...], color, width}], dot: {x, y, z}, balls: [{x, y, color, opacity}] }
+    lessonMarks(m) {
+      const L = this.lm || (this.lm = { ribbons: [], balls: [], dot: null });
+      let nr = 0, nb = 0;
+      if (m) {
+        for (const ln of m.lines || []) for (let i = 0; i + 1 < ln.pts.length; i++) {
+          const a = ln.pts[i], b = ln.pts[i + 1], len = Math.hypot(b.x - a.x, b.y - a.y); if (len < 1e-4) continue;
+          let r = L.ribbons[nr];
+          if (!r) {
+            r = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.85, depthWrite: false }));
+            r.renderOrder = 2; this.scene.add(r); L.ribbons.push(r);
+          }
+          r.material.color.set(ln.color || 0xffd640);
+          r.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, 0.0016); r.rotation.set(0, 0, Math.atan2(b.y - a.y, b.x - a.x));
+          r.scale.set(len, ln.width || 0.005, 1); r.visible = true; nr++;
+        }
+        for (const q of m.balls || []) {
+          let s = L.balls[nb];
+          if (!s) {
+            s = new THREE.Mesh(new THREE.SphereGeometry(R, 32, 20), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+            s.renderOrder = 3; this.scene.add(s); L.balls.push(s);
+          }
+          s.material.color.set(q.color || 0xffffff); s.material.opacity = q.opacity || 0.35;
+          s.position.set(q.x, q.y, R); s.visible = true; nb++;
+        }
+      }
+      for (let i = nr; i < L.ribbons.length; i++) L.ribbons[i].visible = false;
+      for (let i = nb; i < L.balls.length; i++) L.balls[i].visible = false;
+      if (!L.dot) {
+        L.dot = new THREE.Mesh(new THREE.SphereGeometry(0.0038, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff2a2a, depthTest: false }));
+        L.dot.renderOrder = 5; this.scene.add(L.dot);
+      }
+      L.dot.visible = !!(m && m.dot);
+      if (L.dot.visible) L.dot.position.set(m.dot.x, m.dot.y, m.dot.z !== undefined ? m.dot.z : R);
     }
 
     // ---- "eclipse" inset: the exact view along the cue line --------------------------------------------------
@@ -909,7 +957,7 @@ window.QB = window.QB || {};
       cam.position.set(cue.x, cue.y, R); cam.lookAt(cue.x + ux, cue.y + uy, R);
       // hide what would block or clutter the view
       const cbMesh = this.balls.get(cue.id);
-      const hide = [cbMesh, this.cue, this.ghost, this.tipMark, this.aimLine, this.obLine, this.cbLine, this.tanLine].filter(Boolean);
+      const hide = [cbMesh, this.cue, this.ghost, this.tipMark, this.aimLine, this.obLine, this.cbLine, this.tanLine].concat(this.lm ? this.lm.balls : []).filter(Boolean);
       const was = hide.map(o => o.visible); hide.forEach(o => { o.visible = false; });
       r.render(this.scene, cam);
       hide.forEach((o, i) => { o.visible = was[i]; });

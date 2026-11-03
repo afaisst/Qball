@@ -27,9 +27,35 @@ window.QB = window.QB || {};
       const sLand = Math.min(cw / outerL, ch / outerW), sUp = Math.min(ch / outerL, cw / outerW);
       const rot = this.autoRotate !== false && sUp > sLand * 1.04;
       const VW = rot ? ch : cw, VH = rot ? cw : ch;
-      this.view = { scale: rot ? sUp : sLand, ox: VW / 2, oy: VH / 2, dpr, rot };
+      this.base = { scale: rot ? sUp : sLand, VW, VH, dpr, rot };
       this.tableLayer.width = VW; this.tableLayer.height = VH;
-      this.drawTable(this.tableLayer.getContext('2d'));
+      if (this.zoomAnim) {          // mid-glide: keep gliding, from a layer of the whole table
+        const z = this.zoom; this.zoom = null; this.updateView(); this.redrawLayer(); this.zoom = z; this.updateView();
+      } else { this.updateView(); this.redrawLayer(); }
+    }
+    // zoom (lessons): magnification k about the world point (cx, cy), which is put in the middle of the view
+    updateView() {
+      const B = this.base, z = this.zoom || { k: 1, cx: 0, cy: 0 }, s = B.scale * z.k;
+      this.view = { scale: s, ox: B.VW / 2 - z.cx * s, oy: B.VH / 2 + z.cy * s, dpr: B.dpr, rot: B.rot };
+    }
+    redrawLayer() { this.drawTable(this.tableLayer.getContext('2d')); this.layerView = Object.assign({}, this.view); }
+    // glide to a new zoom (null = whole table). While gliding, the pre-rendered table is stretched; it is drawn
+    // sharp again at the end.
+    setZoom(z, dur = 0.9) {
+      const to = z ? { k: z.k, cx: z.cx, cy: z.cy } : { k: 1, cx: 0, cy: 0 };
+      const from = this.zoom || { k: 1, cx: 0, cy: 0 };
+      if (Math.abs(from.k - to.k) < 1e-6 && Math.abs(from.cx - to.cx) < 1e-6 && Math.abs(from.cy - to.cy) < 1e-6) return;
+      if (!this.base || dur <= 0) { this.zoom = to; this.zoomAnim = null; if (this.base) { this.updateView(); this.redrawLayer(); } return; }
+      this.zoomAnim = { from, to, t: 0, dur };
+      if (from.k > 1.001) { this.zoom = { k: 1, cx: 0, cy: 0 }; this.updateView(); this.redrawLayer(); this.zoom = from; this.updateView(); }
+    }
+    stepZoom(dt) {
+      const a = this.zoomAnim; if (!a) return;
+      a.t = Math.min(1, a.t + dt / a.dur);
+      const u = a.t * a.t * (3 - 2 * a.t), lk = Math.log(a.from.k) + (Math.log(a.to.k) - Math.log(a.from.k)) * u;
+      this.zoom = { k: Math.exp(lk), cx: a.from.cx + (a.to.cx - a.from.cx) * u, cy: a.from.cy + (a.to.cy - a.from.cy) * u };
+      this.updateView();
+      if (a.t >= 1) { this.zoom = a.to; this.zoomAnim = null; this.updateView(); this.redrawLayer(); }
     }
 
     // world (m) -> canvas px  (y flipped so +y is up)
@@ -164,7 +190,35 @@ window.QB = window.QB || {};
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       if (this.view.rot) ctx.setTransform(0, -1, 1, 0, 0, this.canvas.height);   // virtual x -> screen up
-      ctx.drawImage(this.tableLayer, 0, 0);
+      const lv = this.layerView, v = this.view;
+      if (lv && (lv.scale !== v.scale || lv.ox !== v.ox || lv.oy !== v.oy)) {      // zooming: stretch the table layer
+        const k = v.scale / lv.scale;
+        ctx.save(); ctx.transform(k, 0, 0, k, v.ox - lv.ox * k, v.oy - lv.oy * k); ctx.drawImage(this.tableLayer, 0, 0); ctx.restore();
+      } else ctx.drawImage(this.tableLayer, 0, 0);
+    }
+
+    // ---------------- lesson overlays ----------------
+    // a guide line through world points: {color, width (m), dash ([m, m])}
+    drawGuide(pts, o = {}) {
+      if (!pts || pts.length < 2) return;
+      const ctx = this.ctx; ctx.save();
+      ctx.strokeStyle = o.color || 'rgba(255,214,64,0.95)'; ctx.lineWidth = Math.max(1.5, this.px(o.width || 0.004)); ctx.lineCap = 'round';
+      if (o.dash) ctx.setLineDash(o.dash.map(d => this.px(d)));
+      ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(this.sx(p.x), this.sy(p.y)) : ctx.moveTo(this.sx(p.x), this.sy(p.y))); ctx.stroke();
+      ctx.restore();
+    }
+    drawDot(p, r, color) {
+      const ctx = this.ctx; ctx.save(); ctx.fillStyle = color || '#ff3b3b';
+      ctx.beginPath(); ctx.arc(this.sx(p.x), this.sy(p.y), Math.max(2.5, this.px(r || 0.003)), 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    // a see-through ball (the ghost ball the player places, or the right answer): {fill, stroke}
+    drawGhostBall(p, o = {}) {
+      const ctx = this.ctx, x = this.sx(p.x), y = this.sy(p.y), r = this.px(R);
+      ctx.save();
+      ctx.fillStyle = o.fill || 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = o.stroke || 'rgba(255,255,255,0.95)'; ctx.lineWidth = Math.max(1.5, this.px(0.0025));
+      ctx.setLineDash([this.px(0.006), this.px(0.004)]); ctx.stroke();
+      ctx.restore();
     }
 
     drawTrails(balls, opts = {}) {
@@ -281,7 +335,7 @@ window.QB = window.QB || {};
         ctx.setLineDash([]);
       }
 
-      if (aim.hit && aim.hit.type === 'ball') {
+      if (aim.hit && aim.hit.type === 'ball' && opts.obPath !== false) {
         // object-ball path (line of centers)
         ctx.strokeStyle = 'rgba(255,214,64,0.95)'; ctx.lineWidth = lw * 1.2;
         ctx.beginPath(); ctx.moveTo(this.sx(aim.ob.x), this.sy(aim.ob.y)); ctx.lineTo(this.sx(aim.obEnd.x), this.sy(aim.obEnd.y)); ctx.stroke();
@@ -448,7 +502,7 @@ window.QB = window.QB || {};
       ctx.restore();
     }
 
-    drawLabel(cb, text) {
+    drawLabel(cb, text, color) {
       const ctx = this.ctx;
       ctx.save();
       ctx.font = `600 ${Math.max(11 * this.view.dpr, Math.round(this.px(0.018)))}px system-ui, sans-serif`;
@@ -457,7 +511,7 @@ window.QB = window.QB || {};
       const tw = ctx.measureText(text).width;
       const fh = Math.max(this.px(0.024), 16 * this.view.dpr);
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; roundRect(ctx, x - 5, y - fh * 0.58, tw + 10, fh, 4); ctx.fill();
-      ctx.fillStyle = '#f2c200'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y - this.px(0.002));
+      ctx.fillStyle = color || '#f2c200'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y - this.px(0.002));
       ctx.restore();
     }
 

@@ -245,3 +245,27 @@ button, label.chk { touch-action: manipulation; }
   cursor: move; touch-action: none; user-select: none; border: 1px solid rgba(255,255,255,0.15); }
 #stage.only3d.showmap #mapGrip:hover { background: rgba(79,179,255,0.35); color: #fff; }
 #stage.only3d.showmap.walking #pane2d { width: min(42%, 520px); background: #1b2228; }
+
+/* ---------- scripted lessons: the coach card on the table ---------- */
+#coach { position: absolute; z-index: 20; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(560px, calc(100% - 24px));
+  max-height: 60%; overflow-y: auto; background: rgba(20,26,32,0.94); border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 14px 10px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); font-size: 14px; line-height: 1.45; }
+#coach[hidden] { display: none; }
+#coach .ch-head { display: flex; align-items: center; gap: 10px; padding-left: 28px; font-size: 11px; color: var(--muted); min-height: 22px; }
+#coach .ch-head #coachStep { flex: 1; }
+#coach .cdots { display: inline-flex; gap: 4px; }
+#coach .cdots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+#coach .cdots i.done { background: rgba(63,191,111,0.7); }
+#coach .cdots i.on { background: var(--accent); }
+#coach h3 { margin: 4px 0 2px; font-size: 16px; }
+#coach.result h3 { color: #7fd99a; }
+#coach p { margin: 6px 0; }
+#coach ul { padding-left: 20px; margin: 6px 0; }
+#coach .key { background: rgba(242,194,0,0.12); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; }
+#coach .ch-btns { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+#coach .ch-btns .sp { flex: 1; }
+#coach .ch-btns .wait { color: var(--accent); font-size: 12px; font-style: italic; animation: coachPulse 1.4s ease-in-out infinite; }
+@keyframes coachPulse { 50% { opacity: 0.35; } }
+.lsteps.wrap { flex-wrap: wrap; }
+.lsteps.wrap span { flex: 1 1 30%; cursor: pointer; }
+#eclipse.hl { box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(242,194,0,0.45); }

@@ -152,7 +152,14 @@
   const eff = () => S.eff || computeEffTip();
   const impactNow = (cueSpeed) => QB.cueImpact(world.params, cueSpeed, S.aim, eff().x, eff().y, S.elev / DEG);
   const launchAngle = () => impactNow(1).angle; // aim + squirt (+ miscue deflection)
-  const squirtLine = () => $('optSquirtLine').checked;  // helper lines follow the real launch direction?
+  const squirtLine = () => $('optSquirtLine').checked;
+  // aiming aids: the settings check boxes, unless a lesson overrides them (S.act.aids)
+  const AID_IDS = { aim: 'optAimLine', ghost: 'optGhost', cbpath: 'optCBPath', tangent: 'optTangent', tipmark: 'optTipMark', eclipse: 'optEclipse', overview: 'optOverview' };
+  function aid(k) {
+    const o = S.act && S.act.kind === 'lesson' && S.act.aids;
+    if (o && o[k] !== undefined) return o[k];
+    return AID_IDS[k] ? $(AID_IDS[k]).checked : true;
+  }  // helper lines follow the real launch direction?
   const normAng = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
   function setStatus(msg, flash) {
@@ -208,6 +215,10 @@
 
   // ---------------- Shooting ----------------
   function beginStrike(speed) {
+    if (scriptOn()) {                          // scripted lesson: shoot only when asked, at the lesson's strength
+      if (shotLocked()) { S.phase = 'aim'; S.pull = 0; setStatus(S.act.result ? 'Choose what to do next in the lesson card.' : 'Read the lesson card, then press Next.', true); return; }
+      speed = S.act.g.power;
+    }
     if (!cue.onTable || speed <= 0) return;
     S.strikeSpeed = speed;
     S.strikeFrom = Math.max(S.pull, pullFromSpeed(speed));
@@ -321,13 +332,13 @@
   }
   // Walk mode (3D only): stand up where you are; move the blue dot on the map, drag the 3D view to look around
   function startWalking() {
-    if (!view3d || S.view !== '3d' || view3d.walk) return;
+    if (!view3d || S.view !== '3d' || view3d.walk || scriptOn()) return;
     view3d.startWalk();
     setStatus('Walking: drag the blue dot on the map to move (or click where to go) · drag the blue view cone to look at a spot (you keep facing it as you walk) · wheel / pinch on the 3D view to bend down · 🚶 again, double-click the map or pick up the cue: back to your shot.');
   }
   function toggleWalk() { if (view3d && view3d.walk) returnToShot(); else startWalking(); }
   function canDrag(b, shift) {
-    if (!b) return false;
+    if (!b || scriptOn()) return false;
     if (S.mode === 'test') return b === cue || S.moveMode || shift;
     if (placeMode()) return S.arrange || shift || b === cue;   // free ball placement: arrange anything
     return b === cue && !!S.ballInHand;   // ball in hand after a scratch / for the break
@@ -338,6 +349,9 @@
     QB.Sound.init();
     const p = renderer.toWorld(ev.clientX, ev.clientY);
     S.pointer = p;
+    if (scriptOn() && S.act.placing && S.phase === 'aim') {   // lesson: drag the ghost ball around the object ball
+      moveUserGB(p); S.ghostDrag = true; canvas.setPointerCapture(ev.pointerId); canvas.classList.add('grabbing'); return;
+    }
     const b = S.phase === 'aim' ? ballAt(p) : null;
     if (isMap() && !(b && canDrag(b, ev.shiftKey))) {
       // 3D-only view: the small map never aims or shoots; it places balls in hand and steers walking
@@ -369,6 +383,8 @@
       const fine = Math.hypot(p.x - cue.x, p.y - cue.y) < nearR;
       S.touchAim = { fine, a0: S.aim, p0: p };
       if (!fine) touchAimTo(p);
+    } else if (cue.onTable && shotLocked()) {
+      return;
     } else if (cue.onTable) {
       // press anywhere: drag back to pull the cue and shoot; a plain click (no drag) freezes / unfreezes the aim
       S.phase = 'pull'; S.pullStart = p; S.pull = 0; S.pressPx = { x: ev.clientX, y: ev.clientY };
@@ -387,6 +403,8 @@
     const p = renderer.toWorld(ev.clientX, ev.clientY);
     if (S.touchAim) { S.pointer = p; touchAimTo(p); return; }
     S.pointer = p;
+    if (S.ghostDrag) { moveUserGB(p); return; }
+    if (scriptOn() && S.act.placing) { const U = S.act.userGB; canvas.classList.toggle('grab', !!U && Math.hypot(p.x - U.x, p.y - U.y) < 2 * R); return; }
     if (S.walkDrag === 'focus') {            // move the fixed point; it snaps onto a ball when dropped near one
       let fx = p.x, fy = p.y;
       for (const b of world.balls) if (b.onTable && Math.hypot(b.x - p.x, b.y - p.y) < 0.04) { fx = b.x; fy = b.y; }
@@ -420,6 +438,7 @@
 
   canvas.addEventListener('pointerup', (ev) => {
     canvas.classList.remove('grabbing');
+    if (S.ghostDrag) { S.ghostDrag = false; return; }
     if (S.touchAim) { S.touchAim = null; return; }
     if (S.walkDrag) {
       S.walkDrag = false; view3d.endMove();
@@ -661,6 +680,7 @@
   function aimAt(b) { if (b && cue) S.aim = Math.atan2(b.y - cue.y, b.x - cue.x); }
 
   function startGame(id) {
+    leaveScript();
     const g = gameById(id);
     setBalls(g.balls(table));
     S.act = { kind: 'game', id, shots: 0, pocketed: [], rack: world.balls.filter(b => b.num !== 0).map(b => b.num).sort((x, y) => x - y), won: false };
@@ -670,6 +690,7 @@
     updateActivityUI(); defaultStatus(); renderReport(); syncInputs(true);
   }
   function startDrill(id, n) {
+    leaveScript();
     const d = drillById(id);
     if (d.type === 'pattern') {
       S.act = { kind: 'drill', pattern: true, id, n: n || (d.levels ? d.levels.start : null), attempt: 1, attempts: 10,
@@ -883,7 +904,9 @@
   const lessonById = (id) => QB.LESSONS.find(l => l.id === id);
   const lessonStepObj = () => { const a = S.act, L = lessonById(a.id); return L.steps[a.step] || null; };
   function startLesson(id) {
+    leaveScript();
     const L = lessonById(id);
+    if (L.script) { startScript(L); updateActivityUI(); renderReport(); syncInputs(true); return; }
     S.act = { kind: 'lesson', id, step: 0, results: L.steps.map(() => ({})), done: false, last: null };
     placeLessonBalls();
     setTip(0, 0); setElev(0);
@@ -908,6 +931,14 @@
   }
   function lessonBand(speed) { const L = lessonById(S.act.id); return L.bands.find(b => speed < b.max) || L.bands[L.bands.length - 1]; }
   function lessonStatus() {
+    if (isScript()) {
+      const a = S.act;
+      if (a.done) return 'Lesson complete — repeat it, or pick another lesson from the Lessons tab.';
+      if (a.result) return a.result.title + ' — see the lesson card.';
+      if (a.task === 'shot') return 'Your shot: pull the cue down and let go (the strength is fixed).';
+      if (a.task === 'place') return 'Drag the white ghost ball around the 9-ball, then press Confirm.';
+      return `${curBeat().title} — press Next in the lesson card.`;
+    }
     const a = S.act, st = lessonStepObj();
     if (a.done || !st) return 'Lesson complete — repeat it, or pick another lesson from the Lessons tab.';
     const left = lessonById(a.id).bands.filter(b => !a.results[a.step][b.id]).map(b => b.name.toLowerCase());
@@ -920,6 +951,7 @@
     return r.cls === 'stop' ? `stopped${cm >= 1 ? ` (${cm} cm)` : ''}` : r.cls === 'follow' ? `followed ${cm} cm` : `drew back ${cm} cm`;
   }
   function afterLessonShot(rep, scratched) {
+    if (isScript()) return scriptAfterShot(rep, scratched);
     const a = S.act, L = lessonById(a.id), st = lessonStepObj();
     if (!st || a.done || !S.lastShot) { setTimeout(placeLessonBalls, 900); return; }
     const band = lessonBand(S.lastShot.speed);
@@ -947,6 +979,22 @@
     }, 1300);
   }
   function updateLessonUI() {
+    const scr = isScript();
+    document.querySelector('#lessonHud .lmeter').style.display = scr ? 'none' : ''; $('lessonResults').style.display = scr ? 'none' : '';
+    $('btnLessonHelp').textContent = scr ? 'Restart this set-up' : 'Show the instructions';
+    $('lessonSteps').classList.toggle('wrap', scr);
+    if (scr) {
+      const a = S.act, L = lessonById(a.id);
+      $('actTitle').textContent = `Lesson ${L.num} · ${L.name}`;
+      $('actInfo').textContent = a.done ? 'Lesson complete.' : `Set-up ${a.scene + 1} of ${L.scenes.length}: ${curScene().title}. Follow the lesson card on the table.`;
+      $('drillHud').hidden = true; $('trayBox').hidden = true;
+      for (const el of document.querySelectorAll('.drill-only, .place-only')) el.hidden = true;
+      $('btnRack').textContent = 'Restart lesson';
+      $('btnLessonHelp').hidden = a.done;
+      $('lessonSteps').innerHTML = L.scenes.map((s, i) => `<span data-i="${i}" title="Go to this set-up" class="${i === a.scene && !a.done ? 'on' : i < a.scene || a.done ? 'done' : ''}">${i + 1}. ${s.short || s.title}</span>`).join('');
+      return;
+    }
+    $('btnLessonHelp').hidden = false;
     const a = S.act, L = lessonById(a.id), st = lessonStepObj();
     $('actTitle').textContent = `Lesson ${L.num} · ${L.name}`;
     $('actInfo').textContent = a.done ? 'Lesson complete.' : st ? `Step ${a.step + 1}: ${st.title.toLowerCase()} — put the tip ${st.tip.label}, then shoot soft, medium and hard.` : '';
@@ -962,7 +1010,7 @@
   }
   // strength meter: which band the current pull (or the last shot) is in
   function lessonMeter() {
-    const L = lessonById(S.act.id);
+    const L = lessonById(S.act.id); if (L.script) return;
     const v = S.phase === 'pull' ? speedFromPull(S.pull) : S.phase === 'strike' ? S.strikeSpeed : null;
     const id = v !== null && v !== undefined ? lessonBand(v).id : '';
     if (id === S.lessonMeterKey) return;
@@ -971,7 +1019,8 @@
   }
   // on the cue-ball diagram: the line the tip may move on, and the step's target
   function lessonPadOverlay(ctx, c, r, dpr) {
-    const L = lessonById(S.act.id), st = lessonStepObj(), tr = L.tipRange;
+    const L = lessonById(S.act.id); if (L.script) return;
+    const st = lessonStepObj(), tr = L.tipRange;
     ctx.save();
     ctx.strokeStyle = 'rgba(59,111,216,0.45)'; ctx.lineWidth = 3 * dpr; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(c + tr.x[0] * r, c - tr.y[1] * r); ctx.lineTo(c + tr.x[0] * r, c - tr.y[0] * r); ctx.stroke();
@@ -992,7 +1041,214 @@
     }
     $('lessonModal').hidden = false;
   }
-  $('btnLessonHelp').onclick = () => { if (S.act.kind === 'lesson' && !S.act.done) showLessonStep(); };
+  $('btnLessonHelp').onclick = () => {
+    if (isScript()) { if (!S.act.done) enterScene(S.act.scene, true); return; }
+    if (S.act.kind === 'lesson' && !S.act.done) showLessonStep();
+  };
+
+  $('lessonSteps').addEventListener('click', (ev) => {        // scripted lesson: jump to a set-up
+    const el = ev.target.closest('span[data-i]'); if (!el || !isScript()) return;
+    if (S.act.done) { startLesson(S.act.id); }
+    enterScene(+el.dataset.i, true);
+  });
+
+  // ---------------- Scripted lessons (js/lessons.js, script: true) ----------------
+  // The coach card (on the table) walks through each set-up beat by beat: it moves the 2D zoom and the 3D camera,
+  // switches aiming aids, draws marks, and waits for Next, a shot, or the player placing the ghost ball.
+  function isScript() { return S.act.kind === 'lesson' && !!S.act.script; }
+  function scriptOn() { return isScript() && !S.act.done; }
+  const curScene = () => lessonById(S.act.id).scenes[S.act.scene];
+  const curBeat = () => curScene().beats[S.act.beat];
+  function ptOf(k) {
+    if (!k) return null;
+    if (typeof k !== 'string') return k;
+    if (k === 'YOU') return S.act.userGB;
+    return S.act.g.pts[k] || null;
+  }
+  function centerOf(at) {
+    const list = (Array.isArray(at) ? at : [at]).map(ptOf).filter(Boolean);
+    return { x: list.reduce((s, p) => s + p.x, 0) / list.length, y: list.reduce((s, p) => s + p.y, 0) / list.length };
+  }
+  function camPose(c) {
+    const A = ptOf(c.along[0]), B = ptOf(c.along[1]), Lk = ptOf(c.look || c.along[0]);
+    const l = Math.hypot(B.x - A.x, B.y - A.y) || 1, ux = (B.x - A.x) / l, uy = (B.y - A.y) / l, t = (c.tilt || 30) / DEG;
+    const d = c.back !== undefined ? (Math.hypot(Lk.x - A.x, Lk.y - A.y) + c.back) / Math.cos(t) : (c.dist || 0.6);
+    // the subject sits a little above the middle of the picture (the lesson card covers the bottom)
+    const fov = c.fov || 42, up = d * Math.tan((c.raise !== undefined ? c.raise : 0.3) * fov / 2 / DEG);
+    return { eye: [Lk.x - ux * d * Math.cos(t), Lk.y - uy * d * Math.cos(t), R + d * Math.sin(t)],
+      target: [Lk.x - ux * Math.sin(t) * up, Lk.y - uy * Math.sin(t) * up, R - Math.cos(t) * up], fov };
+  }
+  // The strength of the lesson shot: the cue speed (centre ball, aimed at the ghost ball) that pockets the object
+  // ball and leaves the cue ball on the table, as close as possible to where the ghost ball was.
+  function lessonPower(g) {
+    const CB = g.pts.CB, OB = g.pts.OB, GB = g.pts.GB, aim = Math.atan2(GB.y - CB.y, GB.x - CB.x);
+    let best = null;
+    for (let v = 1.0; v <= 4.0001; v += 0.25) {
+      const w = new QB.World(table, Object.assign({}, world.params)); w.recordTrails = false;
+      const c = w.addBall(0, CB.x, CB.y), o = w.addBall(g.obNum, OB.x, OB.y);
+      w.cueStrike(c, v, aim, 0, 0, 0); w.runToRest(20, C.DT);
+      if (o.onTable || !c.onTable) continue;
+      const nearPocket = Math.min(...table.pockets.map(p => Math.hypot(c.x - p.x, c.y - p.y))) < 0.14;
+      const score = Math.hypot(c.x - GB.x, c.y - GB.y) + (nearPocket ? 0.5 : 0) + 0.02 * v;
+      if (!best || score < best.score) best = { v, score };
+    }
+    return best ? best.v : 2.5;
+  }
+  function startScript(L) {
+    S.act = { kind: 'lesson', id: L.id, script: true, scene: 0, beat: 0, done: false, prevView: S.view, layouts: {} };
+    setTip(0, 0); setElev(0);
+    enterScene(0);
+  }
+  function enterScene(i, keepLayout) {
+    const a = S.act, sc = lessonById(a.id).scenes[i];
+    a.scene = i; a.beat = 0; a.result = null; a.userGB = null; a.showAnswer = false;
+    if (!keepLayout || !a.layouts[i]) a.layouts[i] = sc.layout(table, a.layouts);
+    a.g = a.layouts[i];
+    if (!a.g.power) a.g.power = lessonPower(a.g);
+    resetSceneBalls();
+    applyBeat();
+  }
+  function resetSceneBalls() {
+    const a = S.act;
+    if (S.phase === 'moving' || S.phase === 'strike') stopAll();
+    setBalls(a.g.balls);
+    S.ballInHand = false; S.aimLocked = true; S.clickLock = false;
+    clearShotMarks(); a.shotTaken = false;
+  }
+  function applyBeat() {
+    const a = S.act, b = curBeat();
+    a.result = null; a.showAnswer = false;
+    if (a.shotTaken) resetSceneBalls();
+    a.task = b.task || null;
+    a.aids = Object.assign({ aim: true, ghost: true, obpath: true, tangent: false, cbpath: false, eclipse: false, tipmark: true, overview: true }, b.aids || {});
+    a.marks = typeof b.marks === 'function' ? b.marks(a.g) : (b.marks || null);
+    // aim: fixed (at the ghost ball unless the beat says otherwise) or free for the player
+    if (b.aim === 'free') {
+      a.aim = undefined; S.aimLocked = false;
+      const t = ptOf(b.aimStart || 'OB'); if (t) S.aim = Math.atan2(t.y - cue.y, t.x - cue.x);
+    } else {
+      const t = ptOf(b.aimAt || a.g.aimAt || 'GB');
+      a.aim = Math.atan2(t.y - cue.y, t.x - cue.x); S.aim = a.aim; S.aimLocked = true;
+    }
+    a.placing = b.task === 'place';
+    if (a.placing && !a.userGB) {        // the player's ghost ball starts on the cue-ball side of the object ball
+      const OB = a.g.pts.OB, CB = a.g.pts.CB, an = Math.atan2(CB.y - OB.y, CB.x - OB.x);
+      a.userGB = { x: OB.x + 2 * R * Math.cos(an), y: OB.y + 2 * R * Math.sin(an) };
+    }
+    if (view3d && view3d.walk) view3d.stopWalk();
+    S.mapOn = false;
+    const v = view3d ? (b.view || S.view) : '2d';
+    if (v !== S.view) setView(v, true);
+    if (b.zoom) { const c = centerOf(b.zoom.at); renderer.setZoom({ k: b.zoom.k, cx: c.x + (b.zoom.dx || 0), cy: c.y + (b.zoom.dy || 0) }); } else renderer.setZoom(null);
+    if (view3d) { view3d.setScripted(b.cam ? camPose(b.cam) : null); if (b.z !== undefined) view3d.z = b.z; }
+    $('eclipse').classList.toggle('hl', !!(b.aids && b.aids.eclipse && !b.task));   // point at the inset while it is explained
+    showCoach(); updateActivityUI(); defaultStatus();
+  }
+  function scriptNext() {
+    const a = S.act, sc = curScene();
+    if (a.beat < sc.beats.length - 1) { a.beat++; applyBeat(); } else scriptNextScene();
+  }
+  function scriptBack() {
+    const a = S.act;
+    if (a.result) { applyBeat(); return; }
+    if (a.beat > 0) { a.beat--; applyBeat(); return; }
+    if (a.scene > 0) { enterScene(a.scene - 1, true); S.act.beat = curScene().beats.length - 1; applyBeat(); }
+  }
+  function scriptNextScene() {
+    const a = S.act, L = lessonById(a.id);
+    if (a.scene < L.scenes.length - 1) enterScene(a.scene + 1); else finishScript();
+  }
+  function leaveScript() {
+    const a = S.act;
+    if (!a || !a.script || a.left) return;
+    a.left = true; a.aids = null; a.marks = null; a.aim = undefined; a.placing = false; a.userGB = null; a.showAnswer = false;
+    renderer.setZoom(null, 0.6);
+    if (view3d) view3d.setScripted(null);
+    $('coach').hidden = true; $('eclipse').classList.remove('hl');
+    if (a.prevView && a.prevView !== S.view) setView(a.prevView, true);
+  }
+  function finishScript() {
+    const a = S.act, L = lessonById(a.id);
+    leaveScript(); a.done = true; S.aimLocked = false;
+    updateActivityUI(); defaultStatus();
+    lessonModal(L.summary.title, L.summary.html, [{ label: 'Repeat the lesson', run: () => startLesson(L.id) }, { label: 'All lessons', run: () => showMenu('lessons') }, { label: 'Close', primary: true }]);
+  }
+  // after a lesson shot: how did it go?
+  function scriptAfterShot(rep, scratched) {
+    const a = S.act; if (!scriptOn()) return;
+    a.shotTaken = true;
+    const g = a.g, sc = curScene(), obBall = world.balls.find(b => b.num === g.obNum);
+    const r = { made: !!obBall && !obBall.onTable, scratch: scratched,
+      cbDist: cue.onTable ? Math.hypot(cue.x - g.pts.GB.x, cue.y - g.pts.GB.y) : null };
+    if (sc.place && a.userGB && S.lastShot) {
+      const OB = g.pts.OB, GB = g.pts.GB, U = a.userGB, CB = g.pts.CB;
+      r.ghostErr = Math.abs(normAng(Math.atan2(U.y - OB.y, U.x - OB.x) - Math.atan2(GB.y - OB.y, GB.x - OB.x))) * DEG;
+      const ux = Math.cos(S.lastShot.angle), uy = Math.sin(S.lastShot.angle);
+      r.aimErrMm = Math.abs((U.x - CB.x) * -uy + (U.y - CB.y) * ux) * 1000;
+      a.showAnswer = true;
+    }
+    const res = Object.assign({}, sc.result ? sc.result(g, r) : { title: r.made ? 'In!' : 'Missed', html: '' });
+    if (r.scratch) res.html += '<p>(The cue ball went in a pocket too — that would be a foul in a game.)</p>';
+    const last = a.scene === lessonById(a.id).scenes.length - 1;
+    const nextLbl = last ? 'Finish ▶' : 'Next set-up ▶';
+    if (r.made) res.buttons = [{ label: 'Shoot again', run: () => { resetSceneBalls(); applyBeat(); } }, { label: nextLbl, primary: true, run: scriptNextScene }];
+    else if (sc.place) res.buttons = [{ label: 'Skip', run: scriptNextScene }, { label: 'Try again', primary: true, run: () => { a.userGB = null; a.beat = 0; resetSceneBalls(); applyBeat(); } }];
+    else res.buttons = [{ label: 'Skip', run: scriptNextScene }, { label: 'Shoot again', primary: true, run: () => { resetSceneBalls(); applyBeat(); } }];
+    a.result = res;
+    // keep looking at the whole table from behind the shot while the result is shown
+    if (view3d && S.lastShot && S.setup) view3d.setScripted(view3d.overviewPose(S.lastShot.angle, S.setup[cue.id], S.ovBack, S.ovHeight), 0.6);
+    showCoach(); updateActivityUI(); defaultStatus();
+  }
+  // shots: only when the beat asks for one, and always at the lesson's strength
+  function shotLocked() { return scriptOn() && (S.act.task !== 'shot' || !!S.act.result); }
+  // the player's ghost ball: it always touches the object ball, so dragging moves it around the object ball
+  function moveUserGB(p) {
+    const OB = S.act.g.pts.OB, an = Math.atan2(p.y - OB.y, p.x - OB.x);
+    S.act.userGB = { x: OB.x + 2 * R * Math.cos(an), y: OB.y + 2 * R * Math.sin(an) };
+  }
+  // marks of the current beat (names resolved to points), plus the player's ghost ball and the answer
+  function scriptMarks() {
+    if (!scriptOn()) return null;
+    const a = S.act, m = a.marks || {}, out = { lines: [], dot: null, labels: [], balls: [] };
+    for (const l of m.lines || []) { const pts = l.pts.map(ptOf).filter(Boolean); if (pts.length > 1) out.lines.push({ pts, color: l.color, width: l.width }); }
+    if (m.dot) out.dot = ptOf(m.dot);
+    for (const t of m.labels || []) { const p = ptOf(t.at); if (p) out.labels.push({ at: { x: p.x + (t.dx || 0), y: p.y + (t.dy || 0) }, text: t.text, color: t.color }); }
+    if (a.userGB) out.balls.push({ x: a.userGB.x, y: a.userGB.y, color: '#ffffff', opacity: 0.4, you: true });
+    if (a.showAnswer) {
+      const g = a.g.pts; out.balls.push({ x: g.GB.x, y: g.GB.y, color: '#3fbf6f', opacity: 0.45, answer: true });
+      out.lines.push({ pts: [g.P, g.OB, g.GB], color: '#3fbf6f' });
+    }
+    return out;
+  }
+  function lessonMarks() { const m = scriptMarks(); return m && (m.lines.length || m.dot || m.balls.length) ? m : null; }
+  function drawScriptMarks2D(layer) {
+    const m = scriptMarks(); if (!m) return;
+    if (layer === 'under') { for (const l of m.lines) renderer.drawGuide(l.pts, { color: l.color, width: l.width || 0.004 }); return; }
+    for (const q of m.balls) renderer.drawGhostBall(q, q.answer ? { fill: 'rgba(63,191,111,0.35)', stroke: '#3fbf6f' } : {});
+    if (m.dot) renderer.drawDot(m.dot, 0.0035, '#ff3b3b');
+    for (const t of m.labels) renderer.drawLabel(t.at, t.text, t.color || '#ffffff');
+    if (S.act.placing && S.act.userGB) { const U = S.act.userGB, O = S.act.g.pts.OB, d = Math.hypot(U.x - O.x, U.y - O.y) || 1;   // label on the far side from the 9
+      renderer.drawLabel({ x: U.x + (U.x - O.x) / d * 0.05, y: U.y + (U.y - O.y) / d * 0.05 - 0.05 }, 'drag me around the 9', '#ffffff'); }
+  }
+  // the coach card
+  function showCoach() {
+    const a = S.act, L = lessonById(a.id), sc = curScene(), b = curBeat();
+    $('coach').hidden = false;
+    $('coachStep').textContent = `Lesson ${L.num} · set-up ${a.scene + 1} of ${L.scenes.length}: ${sc.title}`;
+    $('coachDots').innerHTML = sc.beats.map((_, i) => `<i class="${i === a.beat ? 'on' : i < a.beat ? 'done' : ''}"></i>`).join('');
+    const res = a.result;
+    $('coachTitle').textContent = res ? res.title : b.title;
+    $('coachBody').innerHTML = res ? res.html : (typeof b.html === 'function' ? b.html(a.g) : b.html);
+    $('coach').classList.toggle('result', !!res);
+    const box = $('coachBtns'); box.innerHTML = '';
+    const add = (label, run, cls) => { const el = document.createElement('button'); el.textContent = label; if (cls) el.className = cls; el.onclick = run; box.appendChild(el); return el; };
+    const back = add('◀ Back', scriptBack); back.disabled = !res && a.scene === 0 && a.beat === 0;
+    const sp = document.createElement('span'); sp.className = 'sp'; box.appendChild(sp);
+    if (res) for (const bt of res.buttons) add(bt.label, bt.run, bt.primary ? 'primary' : '');
+    else if (a.task === 'place') add('Confirm ✓', scriptNext, 'primary');
+    else if (a.task === 'shot') { const h = document.createElement('span'); h.className = 'wait'; h.textContent = 'take the shot…'; box.appendChild(h); add('Skip ▶', scriptNextScene); }
+    else add(a.beat === sc.beats.length - 1 && a.scene === L.scenes.length - 1 ? 'Finish ▶' : 'Next ▶', scriptNext, 'primary');
+  }
 
   // ---------------- Free ball placement ----------------
   function setArrange(on) { S.arrange = !!on; arrangeButton(); defaultStatus(); }
@@ -1059,6 +1315,17 @@
     g.addEventListener('dblclick', (ev) => { ev.stopPropagation(); opts.reset(); });
   }
   // pop-ups: move freely on the screen (kept for as long as the page is open)
+  {                                     // the lesson coach card moves like the pop-ups
+    const box = $('coach');
+    addGrip(box, {
+      move(x, y) {
+        const r = box.getBoundingClientRect();
+        x = Math.max(4, Math.min(window.innerWidth - r.width - 4, x)); y = Math.max(4, Math.min(window.innerHeight - 40, y));
+        Object.assign(box.style, { position: 'fixed', left: x + 'px', top: y + 'px', bottom: 'auto', transform: 'none' });
+      },
+      reset() { Object.assign(box.style, { position: '', left: '', top: '', bottom: '', transform: '' }); },
+    });
+  }
   for (const id of ['settingsModal', 'helpModal', 'lessonModal']) {
     const box = $(id).querySelector('.lbox');
     addGrip(box, {
@@ -1130,7 +1397,7 @@
     cardsBuilt[which] = true;
     if (which === 'lessons') {
       const box = $('lessonCards'); box.innerHTML = '';
-      for (const L of QB.LESSONS) {
+      for (const L of QB.LESSONS.slice().sort((p, q) => p.num - q.num)) {
         const card = document.createElement('button'); card.className = 'card';
         card.innerHTML = `<canvas></canvas><div class="cbody"><div class="ctitle">${L.name}<span class="ctag">Lesson ${L.num}</span></div><div class="cdesc">${L.blurb}</div></div>`;
         box.appendChild(card);
@@ -1408,7 +1675,7 @@
   // Simulates the shot with the current tip offset and draws the cue ball's path from the first
   // ball contact for ~0.6 m (or up to the next cushion): shows draw / follow / stun.
   function updateCBPath(now) {
-    if (!$('optCBPath').checked || !(S.phase === 'aim' || S.phase === 'pull') || !cue.onTable) { S.cbPath = null; return; }
+    if (!aid('cbpath') || !(S.phase === 'aim' || S.phase === 'pull') || !cue.onTable) { S.cbPath = null; return; }
     const speed = (S.phase === 'pull' && S.pull > 0) ? speedFromPull(S.pull)
       : S.mode === 'test' ? (parseFloat($('inSpeed').value) || 0) : S.refCueSpeed;
     S.cbSpeed = speed;
@@ -1516,6 +1783,7 @@
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (S.act.kind === 'lesson' && S.phase !== 'moving' && S.act.aim !== undefined) S.aim = S.act.aim;   // fixed aim
     if (S.act.kind === 'lesson') lessonMeter();
+    renderer.stepZoom(dt);
     if (S.phase === 'aim' || S.phase === 'pull' || S.phase === 'drag') {
       computeEffTip();
       if (padKey() !== S.padKey) { drawTipPad(); drawElevPad(); }
@@ -1558,16 +1826,17 @@
     // walking: the cue walks with you, so the aim follows the direction you face (unless the aim is locked)
     if (view3d && view3d.walk && S.phase === 'aim' && !S.aimLocked && cue.onTable) S.aim = normAng(view3d.walk.yaw);
     let aim = null;
-    const aidsOn = $('optAimLine').checked, ghostOn = $('optGhost').checked;
+    const aidsOn = aid('aim'), ghostOn = aid('ghost');
     if ((S.phase === 'aim' || S.phase === 'pull') && cue.onTable) {
       aim = QB.computeAim(world, cue, squirtLine() ? launchAngle() : S.aim);
-      if ((aidsOn || ghostOn) && !(placeMode() && S.arrange)) renderer.drawAim(aim, { tangent: $('optTangent').checked, cutLabel: test, lines: aidsOn, ghost: ghostOn, bounce: $('optCBPath').checked });
+      if ((aidsOn || ghostOn) && !(placeMode() && S.arrange)) renderer.drawAim(aim, { tangent: aid('tangent'), cutLabel: test, lines: aidsOn, ghost: ghostOn, bounce: aid('cbpath'), obPath: aid('obpath') });
       if (S.cbPath && !(placeMode() && S.arrange)) renderer.drawCBPath(S.cbPath);
       if (S.cbPath && S.cbPre && S.elev > 0.5 && Math.abs(S.tipX) > 0.005) renderer.drawCBPath(S.cbPre, { dash: true, arrow: false });
       if (S.ballInHand && S.phase === 'aim') renderer.drawLabel(cue, 'ball in hand — drag me');
-      else if (S.aimLocked) renderer.drawLabel(cue, S.clickLock ? 'aim frozen · click to release' : 'aim locked · Space');
+      else if (S.aimLocked && !scriptOn()) renderer.drawLabel(cue, S.clickLock ? 'aim frozen · click to release' : 'aim locked · Space');
       $('cutVal').textContent = aim && aim.hit.type === 'ball' ? `${aim.cutDeg.toFixed(2)}°` : '–';
     }
+    drawScriptMarks2D('under');
     for (const d of S.drops) {                 // (drawn under the cloth's hole only; a ball under the rail is hidden)
       const depth = Math.max(0, R - d.z);
       renderer.drawBall(d.b, null, { x: d.x, y: d.y, scale: Math.max(0.35, 1 - depth / 0.2), shade: Math.min(0.75, depth / 0.1), clip: d.p });
@@ -1577,6 +1846,7 @@
         : (b === cue && S.ballInHand && S.phase === 'aim') ? 'rgba(242,194,0,0.8)' : null;
       renderer.drawBall(b, hl);
     }
+    drawScriptMarks2D('over');
     const arranging = placeMode() && S.arrange;
     const showCue = cue.onTable && (S.phase === 'aim' || S.phase === 'pull' || S.phase === 'strike') && !(test && S.moveMode) && !arranging;
     let pb = S.pull;
@@ -1584,13 +1854,13 @@
     updateMap();
     if (isMap() && view3d && view3d.walk) renderer.drawWalker(view3d.walkerOnMap());
     drawPowerCue(pb);                          // (hidden widgets have zero size and are skipped)
-    const eclOn = !!view3d && $('optEclipse').checked && (S.phase === 'aim' || S.phase === 'pull') && cue.onTable && !arranging;
+    const eclOn = !!view3d && aid('eclipse') && (S.phase === 'aim' || S.phase === 'pull') && cue.onTable && !arranging;
     $('eclipse').hidden = !eclOn;
     // while the balls roll, the cue stays where the shot was played (and the overview camera is set behind it)
     const sc = S.phase === 'moving' && S.lastShot && S.setup && S.setup[cue.id] ? { x: S.setup[cue.id].x, y: S.setup[cue.id].y,
       aim: S.lastShot.angle, elev: (S.lastShot.elev || 0) / DEG, tipX: S.lastShot.tipX, tipY: S.lastShot.tipY, pull: 0 } : null;
-    if (cueViewOn() || eclOn) view3d.render({ shotCue: sc, ovBack: S.ovBack, ovHeight: S.ovHeight, drops: S.drops, drawMain: cueViewOn(), overview: S.phase === 'moving' && $('optOverview').checked, eclipse: eclOn ? eclEls : null, balls: world.balls, cue, aimAngle: S.aim, elev: S.elev / DEG, tipX: eff().x, tipY: eff().y,
-      pull: pb, showCue, showAids: !!aim && aidsOn && !arranging, showGhost: !!aim && ghostOn && !arranging, showTipMark: $('optTipMark').checked && !arranging, showBounce: $('optCBPath').checked, aim, cbPath: arranging ? null : S.cbPath, showTangent: $('optTangent').checked,
+    if (cueViewOn() || eclOn) view3d.render({ shotCue: sc, ovBack: S.ovBack, ovHeight: S.ovHeight, drops: S.drops, drawMain: cueViewOn(), overview: S.phase === 'moving' && aid('overview'), eclipse: eclOn ? eclEls : null, balls: world.balls, cue, aimAngle: S.aim, elev: S.elev / DEG, tipX: eff().x, tipY: eff().y,
+      pull: pb, showCue, showAids: !!aim && aidsOn && !arranging, showGhost: !!aim && ghostOn && !arranging, showTipMark: aid('tipmark') && !arranging, showBounce: aid('cbpath'), aim, cbPath: arranging ? null : S.cbPath, showTangent: aid('tangent'), showObPath: aid('obpath'), lesson: lessonMarks(),
       zone: S.act.kind === 'drill' ? S.act.zone : null, chalk: S.chalk });
     if (showCue) {
       if (view3d && view3d.walk) {           // walking: the cue is carried by the player (on the map: at the blue dot)
@@ -1615,7 +1885,7 @@
   function onResize() { renderer.resize(); if (view3d) view3d.resize(); }
 
   // ---------------- Views: 2D only / split / 3D only ----------------
-  function setView(v) {
+  function setView(v, temp) {      // temp: a lesson switches the view (not remembered)
     if (!view3d) v = '2d';
     if (v !== '3d' && view3d) view3d.stopWalk();
     S.view = v;
@@ -1628,12 +1898,12 @@
     $('btnMap').hidden = v !== '3d';
     $('btnWalk').hidden = v !== '3d';
     $('sec3d').hidden = v !== '3d';                // Walk / Map buttons in the panel (3D-only view)
-    try { localStorage.setItem('qball.view', v); } catch (e) { /* ignore */ }
+    if (!temp) { try { localStorage.setItem('qball.view', v); } catch (e) { /* ignore */ } }
     S.mapShown = null;   // force a layout refresh
     setTimeout(onResize, 0);
   }
   function swapViews() { if (S.view !== 'split') return; stageEl.classList.toggle('swapped'); setTimeout(onResize, 0); }
-  for (const b of document.querySelectorAll('#viewSeg button')) b.onclick = () => setView(b.dataset.view);
+  for (const b of document.querySelectorAll('#viewSeg button')) b.onclick = () => { setView(b.dataset.view); if (scriptOn()) S.act.prevView = b.dataset.view; };
   $('btnSwap').onclick = swapViews;
   $('btnHide3d').onclick = () => setView('2d');
   $('btnMap').onclick = () => { S.mapOn = !S.mapOn; };
@@ -1776,6 +2046,7 @@
   for (const pc of powerCues) {
     pc.addEventListener('pointerdown', (ev) => {
       if (ev.button !== 0 || S.phase !== 'aim' || !cue.onTable || pcDrag) return;
+      if (shotLocked()) { setStatus(S.act.result ? 'Choose what to do next in the lesson card.' : 'Read the lesson card, then press Next.', true); return; }
       QB.Sound.init();
       returnToShot();                          // picking up the cue walks you back to your shot
       pcDrag = { y: ev.clientY, el: pc, id: ev.pointerId }; S.phase = 'pull'; S.pull = 0;
@@ -1836,5 +2107,5 @@
   requestAnimationFrame(frame);
 
   // expose for console debugging / automated tests
-  window.qb = { railDist: (x, y, a) => noseDist(x, y, -Math.cos(a), -Math.sin(a)), eff: () => computeEffTip(), world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot };
+  window.qb = { railDist: (x, y, a) => noseDist(x, y, -Math.cos(a), -Math.sin(a)), eff: () => computeEffTip(), world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot, startLesson, lessonNext: () => scriptNext(), lessonBack: () => scriptBack(), moveUserGB: (x, y) => moveUserGB({ x, y }) };
 })();
