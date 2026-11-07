@@ -278,3 +278,8 @@ button, label.chk { touch-action: manipulation; }
 .cuebtn .cnote { font-size: 10.5px; color: var(--muted); }
 .cuebtn.on { border-color: var(--accent); background: rgba(242,194,0,0.12); box-shadow: inset 0 0 0 1px var(--accent); }
 .cuebtn:disabled { opacity: 0.4; }
+/* the Documentation link in the top bar looks like the buttons next to it */
+a.hdrbtn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; line-height: 1.4; }
+a.hdrbtn:hover { border-color: #47535c; }
+.lshort { display: none; }
+@media (max-width: 1440px) { #lnkDocs .lfull { display: none; } #lnkDocs .lshort { display: inline; } }

@@ -327,6 +327,7 @@ window.QB = window.QB || {};
       // the door: in the corner next to Böcklin's painting (north wall, near the foot-end corner)
       const dHole = { a: RX - 1.15, b: RX - 0.25, top: 2.05 };
       door(wall(0, RY, 2 * RX, 0, dHole), dHole);
+      this.room = { RX, RY, FLOOR, WAIN, door: { a: dHole.a, b: dHole.b, top: FLOOR + dHole.top } };
       wall(-RX, 0, 2 * RY, Math.PI / 2); wall(RX, 0, 2 * RY, -Math.PI / 2);
       this.buildArt(FLOOR, RX, RY);
     }
@@ -395,8 +396,99 @@ window.QB = window.QB || {};
           grp.position.set(px, py, z);
           grp.lookAt(Math.abs(s.x) === RX ? 0 : px, Math.abs(s.y) === RY ? 0 : py, z);
           this.scene.add(grp);
+          (this.paintings = this.paintings || []).push({ grp, W, H, fw, onX: Math.abs(s.x) === RX, side: Math.sign(Math.abs(s.x) === RX ? s.x : s.y), q0: grp.quaternion.clone(), hits: [] });
         };
         img.src = s.a.data;
+      }
+    }
+
+    // ---------------- damage: a ball that flies off the table can hit a wall ----------------
+    // (x, y, z) = where it hits the wall (world), speed = its speed into the wall. A painting there gets cracked
+    // glass and is knocked crooked; anywhere else the wood panelling or the plaster gets a dent. It all stays until
+    // the room is repaired (Settings). Returns what was hit: { kind: 'painting' (+ art) | 'panelling' | 'wall' | 'door' }, or null.
+    wallHit(x, y, z, speed) {
+      const Rm = this.room; if (!Rm) return null;
+      const onX = Math.abs(Math.abs(x) - Rm.RX) < Math.abs(Math.abs(y) - Rm.RY), side = Math.sign(onX ? x : y);
+      for (const p of this.paintings || []) {
+        if (p.onX !== onX || p.side !== side) continue;
+        const lp = p.grp.worldToLocal(new THREE.Vector3(x, y, z));
+        if (Math.abs(lp.x) <= p.W / 2 + p.fw && Math.abs(lp.y) <= p.H / 2 + p.fw) { if (speed > 0.5) this.shatter(p, lp, speed); return { kind: 'painting', art: p.grp.userData.art }; }
+      }
+      const d = Rm.door; if (!onX && side > 0 && x > d.a && x < d.b && z < d.top) return { kind: 'door' };
+      if (speed < 0.8) return null;
+      this.dent(x, y, z, onX, side, speed);
+      return { kind: z - Rm.FLOOR < Rm.WAIN ? 'panelling' : 'wall' };
+    }
+    dent(x, y, z, onX, side, speed) {
+      const Rm = this.room, h = z - Rm.FLOOR;
+      if (!this.damage) { this.damage = new THREE.Group(); this.scene.add(this.damage); }
+      const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+      const g = cv.getContext('2d'), wood = h < Rm.WAIN;
+      const gr = g.createRadialGradient(64, 64, 2, 64, 64, 34);
+      gr.addColorStop(0, wood ? 'rgba(25,12,5,0.95)' : 'rgba(70,62,50,0.9)'); gr.addColorStop(0.55, wood ? 'rgba(60,32,14,0.6)' : 'rgba(150,140,120,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(64, 64, 34, 0, Math.PI * 2); g.fill();
+      // the broken edge: light splinters of raw wood (panelling), or white chips of plaster (above it)
+      for (let i = 0; i < 40; i++) {
+        const a = Math.random() * Math.PI * 2, r = 14 + Math.random() * 12, l = 3 + Math.random() * 7;
+        g.strokeStyle = wood ? `rgba(${210 + Math.random() * 30},${165 + Math.random() * 30},${110 + Math.random() * 30},0.85)` : 'rgba(245,242,232,0.9)';
+        g.lineWidth = 1 + Math.random() * 2; g.beginPath();
+        g.moveTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r); g.lineTo(64 + Math.cos(a) * (r + l), 64 + Math.sin(a) * (r + l)); g.stroke();
+      }
+      g.strokeStyle = wood ? 'rgba(20,10,4,0.85)' : 'rgba(60,55,45,0.8)'; g.lineCap = 'round';
+      const n = 5 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < n; i++) {                               // cracks running out of the dent
+        let a = Math.random() * Math.PI * 2, r = 12, px = 64 + Math.cos(a) * r, py = 64 + Math.sin(a) * r;
+        g.lineWidth = 1.5 + Math.random() * 1.5; g.beginPath(); g.moveTo(px, py);
+        const len = 30 + Math.random() * 30 * Math.min(1, speed / 3);
+        while (r < len) { a += (Math.random() - 0.5) * 0.6; r += 6; px += Math.cos(a) * 6; py += Math.sin(a) * 6; g.lineTo(px, py); }
+        g.stroke();
+      }
+      const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding;
+      const size = 0.07 + 0.08 * Math.min(1, speed / 5);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 0.9 }));
+      const off = h < 0.12 ? 0.032 : Math.abs(h - Rm.WAIN) < 0.03 ? 0.042 : 0.004;     // (in front of the baseboard / chair rail)
+      const px = onX ? side * (Rm.RX - off) : x, py = onX ? y : side * (Rm.RY - off);
+      m.position.set(px, py, z); m.lookAt(onX ? 0 : px, onX ? py : 0, z); m.rotateZ(Math.random() * Math.PI * 2);
+      this.damage.add(m);
+    }
+    // cracked glass over the painting (a star of cracks around each hit) and the frame knocked crooked
+    shatter(p, lp, speed) {
+      const first = !p.hits.length;
+      p.hits.push([lp.x / p.W + 0.5, 0.5 - lp.y / p.H, speed]);
+      if (!p.crack) {
+        p.crackCv = document.createElement('canvas'); p.crackCv.width = 1024; p.crackCv.height = Math.round(1024 * p.H / p.W);
+        p.crackTex = new THREE.CanvasTexture(p.crackCv);
+        p.crack = new THREE.Mesh(new THREE.PlaneGeometry(p.W, p.H), new THREE.MeshBasicMaterial({ map: p.crackTex, transparent: true, depthWrite: false }));
+        p.crack.position.z = 0.014; p.grp.add(p.crack);
+      }
+      const cv = p.crackCv, g = cv.getContext('2d'), Wc = cv.width, Hc = cv.height;
+      const [u, v, sp] = p.hits[p.hits.length - 1], cx = Math.max(0, Math.min(1, u)) * Wc, cy = Math.max(0, Math.min(1, v)) * Hc;
+      const big = Math.min(1, sp / 4), rays = 12 + Math.floor(Math.random() * 8), reach = Wc * (0.25 + 0.5 * big);
+      g.lineCap = 'round';
+      g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.arc(cx, cy, 10 + 14 * big, 0, Math.PI * 2); g.fill();   // the crushed spot
+      const ends = [];
+      for (let i = 0; i < rays; i++) {                            // radial cracks
+        let a = (i + Math.random() * 0.6) / rays * Math.PI * 2, x = cx, y = cy, r = 0;
+        const len = reach * (0.5 + Math.random() * 0.5), pts = [[x, y]];
+        while (r < len) { a += (Math.random() - 0.5) * 0.25; const st = 14 + Math.random() * 18; x += Math.cos(a) * st; y += Math.sin(a) * st; r += st; pts.push([x, y]); }
+        for (const [col, lw] of [['rgba(0,0,0,0.35)', 3.5], ['rgba(240,246,255,0.9)', 1.6]]) {
+          g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); pts.forEach(([px, py], k) => k ? g.lineTo(px, py) : g.moveTo(px, py)); g.stroke();
+        }
+        ends.push(pts);
+      }
+      for (const f of [0.18, 0.38, 0.62]) {                       // rings of cracks between the rays
+        g.strokeStyle = 'rgba(240,246,255,0.75)'; g.lineWidth = 1.2; g.beginPath();
+        ends.forEach((pts, k) => { const q = pts[Math.min(pts.length - 1, Math.floor(pts.length * f))]; if (Math.random() < 0.8) (k ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); });
+        g.closePath(); g.stroke();
+      }
+      p.crackTex.needsUpdate = true;
+      if (first || sp > 2) p.grp.rotateZ((Math.random() < 0.5 ? -1 : 1) * (0.04 + 0.1 * big));   // knocked crooked
+    }
+    repairRoom() {
+      if (this.damage) { for (const m of [...this.damage.children]) { this.damage.remove(m); m.geometry.dispose(); m.material.map.dispose(); m.material.dispose(); } }
+      for (const p of this.paintings || []) {
+        if (p.crack) { p.grp.remove(p.crack); p.crack.geometry.dispose(); p.crackTex.dispose(); p.crack.material.dispose(); p.crack = null; }
+        p.hits = []; p.grp.quaternion.copy(p.q0);
       }
     }
 
@@ -455,10 +547,11 @@ window.QB = window.QB || {};
 
     // one model per cue in the rack (QB.CUES); setCueLook picks the one in the player's hands
     buildCue() {
-      const L = C.CUE_LEN, hw = (d) => 0.0065 + (0.0145 - 0.0065) * (d / L);
       this.cueModels = {};
       for (const cueDef of Object.values(QB.CUES)) {
-        const g = new THREE.Group();
+        const g = new THREE.Group(), L = cueDef.len || C.CUE_LEN;
+        const hw = (d) => cueDef.id === 'jump' ? 0.0065 + (0.0125 - 0.0065) * (d / L) : 0.0065 + (0.0145 - 0.0065) * (d / L);
+        g.userData.len = L;
         cueDef.look.forEach(([d0, d1, color], i) => {
           d1 = Math.min(d1, L);
           const rough = i === 0 ? (cueDef.id === 'play' ? 0.9 : 0.45) : i === 2 ? 0.4 : 0.55;
@@ -475,6 +568,7 @@ window.QB = window.QB || {};
       g.position.copy(this.cue.position); g.quaternion.copy(this.cue.quaternion); g.userData.ghost = undefined;
       this.cue.visible = false; this.cue = g;
     }
+    get cueLen() { return (this.cue && this.cue.userData.len) || C.CUE_LEN; }
 
     buildAids() {
       const mk = (color, opacity = 1) => {
@@ -749,9 +843,9 @@ window.QB = window.QB || {};
       const w = this.walk, h = this.walkEyeH(), lean = (1 - this.z) * 0.6;
       const dx = Math.cos(w.yaw), dy = Math.sin(w.yaw), rx = dy, ry = -dx;           // forward, right
       const bx = w.x + dx * (lean - 0.15) + rx * 0, by = w.y + dy * (lean - 0.15) + ry * 0, bz = Math.max(0.06, h - 0.6);
-      const tz = Math.max(0.04, bz - 0.22), horiz = Math.sqrt(Math.max(0, C.CUE_LEN * C.CUE_LEN - (bz - tz) ** 2));
+      const tz = Math.max(0.04, bz - 0.22), horiz = Math.sqrt(Math.max(0, this.cueLen * this.cueLen - (bz - tz) ** 2));
       const tip = [bx + dx * horiz, by + dy * horiz, tz];
-      const L = C.CUE_LEN, toButt = [(bx - tip[0]) / L, (by - tip[1]) / L, (bz - tz) / L];
+      const L = this.cueLen, toButt = [(bx - tip[0]) / L, (by - tip[1]) / L, (bz - tz) / L];
       return { tip, toButt };
     }
     walkerOnMap() {
@@ -776,6 +870,17 @@ window.QB = window.QB || {};
       this.scripted = pose || null;
       if (this.lastPose && (was || pose)) this.trans = { from: this.lastPose, t: 0, dur };
     }
+    // side view of a jump: the camera stands off the shot line, 80 cm away and 17 cm above the cloth, on the
+    // side of the nearer long rail, looking at the stretch where the ball flies
+    jumpPose(J) {
+      const ux = Math.cos(J.aim), uy = Math.sin(J.aim), mx = J.x + ux * 0.45, my = J.y + uy * 0.45;
+      let px = -uy, py = ux; if (mx * px + my * py < 0) { px = -px; py = -py; }
+      const eye = [mx + px * 0.8 - ux * 0.12, my + py * 0.8 - uy * 0.12, 0.17];
+      // the camera stays put but turns to follow the ball in the air (also one flying off the table)
+      const T = J.track, k = T ? Math.min(1, Math.hypot(T.x - mx, T.y - my) / 0.5) : 0;
+      const target = T ? [mx + (T.x - mx) * k, my + (T.y - my) * k, 0.06 + Math.max(-0.4, T.z - 0.06) * k] : [mx, my, 0.06];
+      return { eye, target, fov: 36 };
+    }
     freeze(pose) { this.frozen = pose; }
     unfreeze() { this.frozen = null; }
     poseFor(cb, aim, elev = 0) {
@@ -788,7 +893,7 @@ window.QB = window.QB || {};
       const f = Math.max(0, Math.min(1, (elev * 180 / Math.PI - 2) / 10));
       if (f <= 0) return { eye: eyeA, target: tgtA };
       // eye over the back part of the cue and well above it, so the stick is seen from above (not end-on)
-      const back = C.CUE_LEN + C.MAX_PULL + 0.25, ce = Math.cos(elev), se = Math.sin(elev), hb = back * ce * 0.75;
+      const back = this.cueLen + C.MAX_PULL + 0.25, ce = Math.cos(elev), se = Math.sin(elev), hb = back * ce * 0.75;
       const eyeB = [cb.x - dx * hb, cb.y - dy * hb, R + hb * Math.tan(elev) + 0.35 + 0.3 * se], tgtB = [cb.x + dx * 0.25, cb.y + dy * 0.25, 0];
       // never zoom *in* compared to what the player chose
       const useB = Math.hypot(eyeB[0] - cb.x, eyeB[1] - cb.y) >= this.dist || eyeB[2] >= hA;
@@ -808,6 +913,11 @@ window.QB = window.QB || {};
       if (over) pose = st.shotCue ? this.overviewPose(st.shotCue.aim, st.shotCue, st.ovBack, st.ovHeight) : this.overviewPose(st.aimAngle);
       if (this._wasOver !== undefined && over !== this._wasOver && this.lastPose) this.trans = { from: this.lastPose, t: 0, dur: over ? 0.9 : 0.6 };
       this._wasOver = over;
+      // a jump shot: watch it from the side, low over the cloth (st.jumpView = the shot: start point and direction)
+      const side = !!st.jumpView && !this.walk;
+      if (side) pose = this.jumpPose(st.jumpView);
+      if (this._wasSide !== undefined && side !== this._wasSide && this.lastPose) this.trans = { from: this.lastPose, t: 0, dur: side ? 0.35 : 0.8 };
+      this._wasSide = side;
       // standing up / going back to the shot: blend the camera over ~0.4 s instead of jumping
       const walking = !!this.walk;
       if (this._wasWalking !== undefined && walking !== this._wasWalking && this.lastPose) this.trans = { from: this.lastPose, t: 0 };
@@ -881,7 +991,7 @@ window.QB = window.QB || {};
         const m = this.ballMesh(b);
         m.visible = b.onTable;
         if (!b.onTable) continue;
-        m.position.set(b.x, b.y, R);
+        m.position.set(b.x, b.y, b.z > R ? b.z : R);
         // local axes -> body axes (see ballTexture for which marking sits on which local axis)
         const [X, Y, Z] = b.num === 0 ? [b.ax, b.ay, b.az]
           : b.num >= 9 ? [b.ax, b.az, [-b.ay[0], -b.ay[1], -b.ay[2]]]

@@ -251,7 +251,9 @@ window.QB = window.QB || {};
     // opts (balls dropping into a pocket): {x, y, scale, shade}
     drawBall(b, highlight, opts) {
       if (!b.onTable && !opts) return;
-      const ctx = this.ctx, x = this.sx(opts ? opts.x : b.x), y = this.sy(opts ? opts.y : b.y), r = this.px(R) * (opts ? opts.scale : 1);
+      // a jumping ball: drawn a little bigger the higher it is, with its shadow left behind on the cloth
+      const lift = !opts && b.z > R ? b.z - R : 0;
+      const ctx = this.ctx, x = this.sx(opts ? opts.x : b.x), y = this.sy(opts ? opts.y : b.y), r = this.px(R) * (opts ? opts.scale : 1) * (1 + lift * 2.2);
       if (opts && opts.clip) {                   // a ball in a pocket: only the part seen through the hole
         ctx.save(); ctx.beginPath(); ctx.arc(this.sx(opts.clip.x), this.sy(opts.clip.y), this.px(opts.clip.r), 0, Math.PI * 2); ctx.clip();
         this.drawBall(b, highlight, Object.assign({}, opts, { clip: null }));
@@ -259,8 +261,10 @@ window.QB = window.QB || {};
       }
       // shadow
       if (!opts) {
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.beginPath(); ctx.ellipse(x + r * 0.18, y + r * 0.22, r * 1.02, r * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(0,0,0,${(0.35 / (1 + lift * 12)).toFixed(3)})`;
+        const so = this.px(lift * 0.7), rs = this.px(R);
+        ctx.save(); if (this.view.rot) { ctx.translate(x, y); ctx.rotate(Math.PI / 2); ctx.translate(-x, -y); }
+        ctx.beginPath(); ctx.ellipse(x + rs * 0.18 + so, y + rs * 0.22 + so, rs * 1.02, rs * 0.95, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       }
 
       ctx.save();
@@ -385,7 +389,7 @@ window.QB = window.QB || {};
       const dx = Math.cos(angle), dy = Math.sin(angle);
       const nx = -dy, ny = dx;   // left-pointing normal
       const off = -tipX * R;     // shift along the left normal
-      const tipD = R * Math.sqrt(Math.max(0, 1 - tipX * tipX)) + 0.008 + pullBack, len = C.CUE_LEN;
+      const tipD = R * Math.sqrt(Math.max(0, 1 - tipX * tipX)) + 0.008 + pullBack, len = this.cueLen || C.CUE_LEN;
       const tip = { x: cb.x - dx * tipD + nx * off, y: cb.y - dy * tipD + ny * off };
       const fs = Math.cos(elev);
       const P = (d, half) => [this.sx(tip.x - dx * d * fs + nx * half), this.sy(tip.y - dy * d * fs + ny * half)];

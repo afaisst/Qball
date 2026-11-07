@@ -101,3 +101,11 @@ for (const [lab, v, x, y, c, d] of [['stun 30° cut, slow', 1.0, 0, 0, 30, 0.05]
   console.log(`11) masse: 40° elevation, right english, 0.8 s: CB at (${cb.x.toFixed(3)}, ${cb.y.toFixed(3)}) -> curved ${cb.y < -0.02 ? 'right ✓' : 'NOT right ✗'}`); }
 { const P = QB.defaultParams(), ok = QB.cueImpact(P, 3, 0, 0, -0.5), mis = QB.cueImpact(P, 3, 0, 0.7, 0);
   console.log(`12) miscue limit ${QB.miscueLimit(P).toFixed(3)}R; 0.5R draw: ${ok.speed.toFixed(2)} m/s miscue=${ok.miscue}; 0.7R english: ${mis.speed.toFixed(2)} m/s, ${(mis.angle*deg).toFixed(1)}° off line, miscue=${mis.miscue}`); }
+
+// 13) jump shots: 50° elevation, centre ball, 5 m/s cue speed; jump cue (light) vs playing cue (heavy)
+for (const [name, cp] of [['jump cue', { cueMass: 0.23, tipE: 0.9, tipFriction: 0.55 }], ['playing cue', {}]]) {
+  const w = world(); Object.assign(w.params, cp); const cb = w.addBall(0, -1, 0);
+  w.cueStrike(cb, 5, 0, 0, 0, 50 / deg); let land = null;
+  for (let i = 0; i < 20000 && !land; i++) { w.substep(C.DT); const e = w.events.find(e => e.type === 'bounce'); if (e) land = e; w.events = []; }
+  console.log(`13) jump, ${name}: peak ${((cb.zMax - R) * 100).toFixed(1)} cm, first landing ${land ? ((land.x + 1) * 100).toFixed(0) + ' cm' : '— (stays on the cloth)'}`);
+}

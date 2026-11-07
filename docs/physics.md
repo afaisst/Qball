@@ -20,6 +20,8 @@ The player's guide is the [README](../README.md). This page is for the curious: 
 | Cushion restitution / friction | e = 0.85 (−0.018 per m/s), μc = 0.25, nose at 63.5% of ball height |
 | Playing cue | 0.54 kg (19 oz), tip efficiency 0.80, end mass 3 g (squirt), tip friction 0.66, max speed 6 m/s (cue ball ≈ 8 m/s), elevation 0–80° |
 | Break cue | 0.567 kg (20 oz), phenolic tip: efficiency 0.90, tip friction 0.55 (miscues sooner), end mass 8 g, max speed 9 m/s (cue ball ≈ 13 m/s) |
+| Jump cue | 0.23 kg (8 oz), 1.02 m, phenolic tip: efficiency 0.90, tip friction 0.55, max speed 7 m/s; starts raised to 50° |
+| Ball–slate bounce | restitution eTable = 0.5, with cloth friction (μs) at the bottom of the ball |
 | Ball contact (groups) | Hertz, E = 5 GPa, ν = 0.35 (contact ≈ 0.25 ms) |
 | Timestep | 0.2 ms, with exact rewind to each collision |
 
@@ -39,6 +41,12 @@ Each phase has constant acceleration, so it is integrated analytically, and phas
 
 which reduces to Alciatore's TP A.30 for a level cue. This gives speed and all three spin components, so an elevated cue with english produces **swerve and massé**. If the contact angle exceeds the tip friction limit, the shot is a **miscue**: the tip slides, and you get a weak, off-line, nearly spinless hit. **Squirt** comes from the shaft's effective end mass (TP A.31).
 
+**Jump shots.** A raised cue drives the cue ball down into the slate. After the first tip contact (the formula above, along the cue axis k), the slate throws the ball back up: the downward speed is reversed with restitution eTable (0.5), and cloth friction at the bottom of the ball acts on the slip (up to μs times the slate impulse, never more than stops the slip; this is where a jump or massé shot picks up some topspin). The cue is still moving along its axis at V − F(e·k)/M; if the tip is still closing on the ball, it hits it again (same formula with the closing speed), the slate bounces it again, and so on until the tip no longer catches up. A light jump cue loses most of its speed in the first contact and gets out of the way, so the ball leaves the cloth; a heavy cue held steep keeps hitting the ball and pins it (at 50°, 5 m/s: playing cue 0 cm, jump cue 11 cm high, landing after 1 m).
+
+In the air the ball follows a parabola, its spin unchanged. On landing it bounces (eTable, bounces below 0.12 m/s end on the cloth) with the same cloth friction. Ball–ball contacts with a ball in the air are 3D impulses along the line of centres (a ball on the cloth cannot be pushed down into it); the ball flies over another when the centres stay 2R apart. Against a cushion, a ball whose bottom is above the rubber nose flies over it: past the rail, or coming down on the cushion or rail, it is off the table (a foul; an object ball goes back on the foot spot). Lower, the rubber bounces it back like a wall and halves its vertical speed. A flying ball doesn't drop into a pocket until it comes down to the cloth.
+
+A ball off the table keeps flying in the room (a visual simulation; the rules already count it as off): it can bounce on the rail (restitution 0.4, always outward), falls to the floor 77 cm below the cloth (restitution 0.5, then it rolls and slows at 0.6 m/s²), and bounces off the walls (−0.35 of its speed into the wall, 70% of the rest). A wall hit faster than 0.8 m/s leaves a dent; a painting hit faster than 0.5 m/s gets cracked glass and is knocked crooked. The shot ends when the ball has come to rest on the floor (at most 4 s).
+
 **Ball–ball collisions.** A normal impulse with restitution, plus friction at the contact. Friction uses the measured μ(slip) curve and the spins of both balls. This produces cut-induced throw (≈3.5° for a slow 30° stun cut, <1° when fast) and spin-induced throw, and transfers a little spin to the object ball.
 
 **Groups of touching balls (the break, frozen balls).** One-pair-at-a-time impulses fail in a rack: the order of the pairs decides where the energy goes, and on the break the head ball handed almost everything to one neighbour, so a single ball shot out of a back corner at nearly the cue ball's speed while the rest barely moved. Real balls are a little elastic; a contact lasts about 0.25 ms, much longer than a push needs to cross the tiny gaps in a rack, so all the contacts act together. When a collision involves a ball that touches (within 1.5 mm) other balls, the whole group is integrated with Hertz contact forces (F ∝ δ^1.5) in 2 µs steps until every contact lets go, with the same restitution and ball–ball friction as the impulse model (the two agree within 0.3° of throw for a single pair). On the break the energy now spreads through the rack: the back corner balls and the wing balls leave fastest, the head ball slowly, and the cue ball stops or bounces back a little. A frozen combination passes nearly all the speed to the far ball.
@@ -55,7 +63,7 @@ which reduces to Alciatore's TP A.30 for a level cue. This gives speed and all t
 
 ```bash
 node test/physics_test.js      # rolling speed 5/7, slide/roll distances, 30°/90° rules, cushion, pockets,
-                               # stop/draw/follow, english off the rail, squirt, throw, massé, miscues
+                               # stop/draw/follow, english off the rail, squirt, throw, massé, miscues, jump shots
 node test/compare_cushions.js  # compares the cushion models
 node test/replay_shot.js shot.json [param=value …]   # replays a copied shot, listing every contact
 node test/break_test.js 8ball '{}' 6,9 20             # break statistics over 20 racks at cue speeds 6 and 9 m/s
@@ -66,7 +74,8 @@ The tests need [Node.js](https://nodejs.org) and print measured values next to t
 ## Project structure
 
 ```
-index.html          page layout
+index.html          the guide (landing page)
+play.html           the game: page layout
 css/style.css       styles
 js/constants.js     table, ball, cue dimensions and physics defaults
 js/table.js         table geometry: cushions, pocket jaws, diamonds, spots

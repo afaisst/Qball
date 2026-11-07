@@ -64,11 +64,16 @@ QB.C = {
 //  - Break cue: 20 oz, hard phenolic tip and ferrule. The hard tip loses less energy (efficiency 0.90 vs 0.80) and
 //    the cue is swung all-out (up to 9 m/s instead of 6): the cue ball leaves at up to ~13 m/s (~30 mph), a strong
 //    pro break. The phenolic tip holds chalk less well (miscue sooner) and the stiff shaft squirts more.
+//  - Jump cue: short (102 cm) and light (8 oz), hard phenolic tip. Raised to ~50°, the first contact stops it, so it
+//    doesn't hit the ball a second time as the slate throws the ball up: the ball jumps. (A full cue that steep pins
+//    the ball to the cloth.)
 QB.CUES = {
-  play: { id: 'play', name: 'Playing cue', note: '19 oz · leather tip', cueMass: 0.54, tipE: 0.80, tipFriction: 0.66, cueEndMass: 0.003, maxSpeed: 6.0,
+  play: { id: 'play', name: 'Playing cue', note: '19 oz · leather tip', len: 1.47, cueMass: 0.54, tipE: 0.80, tipFriction: 0.66, cueEndMass: 0.003, maxSpeed: 6.0,
     look: [[0, 0.006, '#3b6fd8'], [0.006, 0.03, '#f2efe6'], [0.03, 0.80, '#e3c48f'], [0.80, 1.02, '#2a1408'], [1.02, 1.30, '#1a1a1a'], [1.30, 1.47, '#2a1408']] },
-  break: { id: 'break', name: 'Break cue', note: '20 oz · phenolic tip', cueMass: 0.567, tipE: 0.90, tipFriction: 0.55, cueEndMass: 0.008, maxSpeed: 9.0,
+  break: { id: 'break', name: 'Break cue', note: '20 oz · phenolic tip', len: 1.47, cueMass: 0.567, tipE: 0.90, tipFriction: 0.55, cueEndMass: 0.008, maxSpeed: 9.0,
     look: [[0, 0.006, '#cfc6ad'], [0.006, 0.045, '#f6f3ea'], [0.045, 0.80, '#e8cc95'], [0.80, 0.99, '#111111'], [0.99, 1.02, '#c21d1d'], [1.02, 1.30, '#7a1212'], [1.30, 1.47, '#111111']] },
+  jump: { id: 'jump', name: 'Jump cue', note: '8 oz · short · phenolic', len: 1.02, cueMass: 0.23, tipE: 0.90, tipFriction: 0.55, cueEndMass: 0.003, maxSpeed: 7.0,
+    look: [[0, 0.006, '#cfc6ad'], [0.006, 0.04, '#f6f3ea'], [0.04, 0.62, '#e8cc95'], [0.62, 0.66, '#d9a400'], [0.66, 0.86, '#1b3f8f'], [0.86, 1.02, '#111111']] },
 };
 QB.CUE_PARAMS = ['cueMass', 'tipE', 'tipFriction', 'cueEndMass'];
 
@@ -84,6 +89,7 @@ QB.defaultParams = function () {
     tipFriction: 0.66, // chalked tip-ball friction; miscue when tan(offset angle) > this -> limit = mu/sqrt(1+mu^2) = 0.55R
     ballFriction: 1.0, // scale on measured ball-ball friction (0.01-0.11 vs slip speed) -> throw; 0 = frictionless
     eBall: 0.975,    // ball-ball coefficient of restitution (phenolic: 0.92-0.98)
+    eTable: 0.5,     // ball–slate (through the cloth) restitution: how a raised-cue shot or a landing ball bounces
     eCushion: 0.85,  // cushion coefficient of restitution
     muCushion: 0.25, // ball-cushion friction (used by the 'realistic' cushion model)
     cushionModel: 'mathavan', // 'mathavan' (2010, cushion + slate friction) | 'realistic' (Han 2005) | 'simple'

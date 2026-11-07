@@ -102,6 +102,27 @@ QB.Sound = (function () {
       this.cue(2.5);
       noise('bandpass', 2900, 1.5, 0.22, 0.03, 0.01);                              // the tip skidding off
     },
+    // a jumping ball landing on the cloth (and the slate under it): a soft, low thud
+    bounce(speed) {
+      if (!enabled) return;
+      const a = clamp01(speed / 2.5);
+      thump(120 * vary(), 80, 0.12 + 0.4 * a, 0.035);
+      noise('lowpass', 500, 0.7, 0.06 + 0.3 * a, 0.02);
+    },
+    // a ball flying into the wall: a hard knock on the panelling or plaster, a hollow one on the door, and breaking
+    // glass on a painting
+    wallHit(speed, kind) {
+      if (!enabled) return;
+      const a = clamp01(speed / 4);
+      if (kind === 'painting') {
+        noise('highpass', 3500, 0.7, 0.35 + 0.45 * a, 0.09);                     // the crack of the glass
+        for (let i = 0; i < 9; i++) noise('bandpass', 2500 + Math.random() * 5000, 3, 0.08 + 0.18 * a * Math.random(), 0.02 + 0.03 * Math.random(), 0.02 + Math.random() * 0.35);   // shards tinkling
+        thump(150, 90, 0.25 * a + 0.1, 0.04);
+        return;
+      }
+      thump(kind === 'door' ? 180 : 110, kind === 'door' ? 120 : 70, 0.2 + 0.5 * a, kind === 'door' ? 0.07 : 0.04);
+      noise('lowpass', kind === 'door' ? 900 : 1400, 0.8, 0.12 + 0.45 * a, 0.025);
+    },
     // ball into the rubber cushion: a dull thud
     cushion(speed) {
       if (!enabled) return;

@@ -1,277 +1,323 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Qball — Billiards Simulator</title>
-  <meta name="description" content="A realistic pool / billiards simulator in the browser: real ball physics, games, drills and a 3D cue view.">
-  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="icon" href="assets/icon-32.png" sizes="32x32" type="image/png">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="css/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qball — a pool simulator that knows the physics</title>
+<meta name="description" content="Qball — a pool (billiards) simulator that knows the physics, for playing, practicing and learning. How it works, lessons, drills, games and controls.">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #12161a; --bg2: #0e1215; --panel: #1a2026; --panel2: #222a31; --line: #2f3941;
+    --text: #e6ebef; --muted: #9aa6b0; --accent: #f2c200; --accent2: #4fb3ff; --felt: #1a7a4c;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent2); text-decoration: none; } a:hover { text-decoration: underline; }
+  img { max-width: 100%; display: block; }
+  kbd { display: inline-block; min-width: 1.6em; padding: 0 6px; border: 1px solid #4a5661; border-bottom-width: 2px; border-radius: 5px;
+    background: var(--panel2); font: 600 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; color: var(--text); }
+  code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  /* top bar */
+  header.top { position: sticky; top: 0; z-index: 10; background: rgba(14,18,21,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  header.top .wrap { display: flex; align-items: center; gap: 18px; height: 58px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 18px; color: var(--text); }
+  .brand img { width: 28px; height: 28px; }
+  nav.sections { display: flex; gap: 16px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+  nav.sections a { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  nav.sections a:hover { color: var(--text); text-decoration: none; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 9px; font-weight: 600; font-size: 15px;
+    border: 1px solid var(--line); color: var(--text); background: var(--panel2); white-space: nowrap; }
+  footer .btn { white-space: normal; }
+  .btn:hover { text-decoration: none; border-color: #4a5661; }
+  .btn.play { background: var(--accent); color: #111; border-color: var(--accent); }
+  .btn.play:hover { background: #ffd21f; }
+  .btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+  /* hero */
+  .hero { text-align: center; padding: 56px 0 30px; background: radial-gradient(ellipse at 50% 0%, rgba(26,122,76,0.35), transparent 65%); }
+  .hero .icon { width: 92px; height: 92px; margin: 0 auto 12px; }
+  .hero h1 { font-size: 46px; margin: 0; letter-spacing: 0.5px; }
+  .hero .tag { font-size: 20px; color: var(--muted); margin: 6px auto 22px; max-width: 640px; }
+  .hero .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .hero .ctas .btn { padding: 11px 22px; font-size: 16px; }
+  .hero .note { color: var(--muted); font-size: 14px; margin-top: 12px; }
+  .shot-main { margin: 34px auto 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,0.55); cursor: zoom-in; }
+
+  /* sections */
+  section { padding: 46px 0 10px; }
+  section h2 { font-size: 30px; margin: 0 0 6px; }
+  section h2 .kicker { display: block; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+  section h3 { font-size: 20px; margin: 30px 0 8px; }
+  .lead { color: var(--muted); font-size: 18px; max-width: 780px; margin: 0 0 22px; }
+  .lead b, .lead strong { color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card h4 { margin: 0 0 5px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .card h4 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex: none; }
+  .card p { margin: 0; color: #c9d1d8; font-size: 15px; }
+  .callout { margin: 18px 0 0; padding: 14px 18px; border-left: 4px solid var(--accent); background: rgba(242,194,0,0.08); border-radius: 0 10px 10px 0; }
+  .figs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 6px 0 20px; }
+  figure { margin: 0; }
+  figure img { border-radius: 10px; border: 1px solid var(--line); cursor: zoom-in; }
+  figure figcaption { color: var(--muted); font-size: 14px; margin-top: 7px; }
+  figure.wide { max-width: 820px; margin: 6px auto 20px; }
+  ul.plain { padding-left: 20px; margin: 8px 0; }
+  ul.plain li { margin: 6px 0; }
+  .lesson { display: grid; grid-template-columns: 56px 1fr; gap: 14px; margin: 14px 0; }
+  .lesson .num { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 22px; color: #111;
+    background: radial-gradient(circle at 35% 35%, #fff 0, #fff 30%, var(--accent) 31%); border: 3px solid var(--accent); }
+  .lesson.two .num { background: radial-gradient(circle at 35% 35%, #fff 0, #fff 30%, #1f4fbf 31%); border-color: #1f4fbf; }
+  .lesson h4 { margin: 4px 0 4px; font-size: 18px; }
+  .lesson p { margin: 0; color: #c9d1d8; }
+  table.keys { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 6px 0 20px; }
+  table.keys td { padding: 10px 14px; border-top: 1px solid var(--line); vertical-align: top; font-size: 15px; }
+  table.keys tr:first-child td { border-top: 0; }
+  table.keys td:first-child { width: 150px; font-weight: 600; color: var(--accent); }
+  pre { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre .c { color: #6f7d88; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 40px; margin: 10px 0; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%; background: var(--panel2);
+    border: 1px solid var(--line); display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--accent); }
+  .timeline { list-style: none; padding: 0; margin: 10px 0; border-left: 2px solid var(--line); }
+  .timeline li { position: relative; padding: 0 0 18px 22px; }
+  .timeline li::before { content: ''; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--felt); border: 2px solid var(--accent); }
+  .timeline .ver { font-weight: 700; } .timeline .date { color: var(--muted); font-size: 14px; margin-left: 6px; }
+  .timeline p { margin: 3px 0 0; color: #c9d1d8; font-size: 15px; }
+  footer { margin-top: 50px; padding: 30px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  footer .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .muted { color: var(--muted); }
+
+  /* image viewer */
+  #viewer { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.88); display: none; place-items: center; padding: 20px; cursor: zoom-out; }
+  #viewer.on { display: grid; }
+  #viewer img { max-width: 96vw; max-height: 86vh; border-radius: 8px; }
+  #viewer p { color: #ddd; text-align: center; max-width: 900px; margin: 10px auto 0; font-size: 14px; }
+
+  @media (max-width: 760px) {
+    nav.sections { display: none; }
+    .hero h1 { font-size: 36px; } .hero .tag { font-size: 17px; }
+    .figs { grid-template-columns: 1fr; }
+    table.keys td:first-child { width: 110px; }
+    .top .btn.gh span { display: none; }
+    header.top .wrap { gap: 10px; } .top .btn { padding: 7px 11px; } .top .btn.gh { margin-left: auto; }
+  }
+</style>
 </head>
 <body>
-  <header>
-    <div class="brand"><img src="assets/icon.svg" alt="" class="logo">Qball</div>
-    <nav class="tabs" role="tablist">
-      <button id="tabTable" class="active">Table</button>
-      <button id="tabLessons">Lessons</button>
-      <button id="tabGames">Games</button>
-      <button id="tabDrills">Drills</button>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="">Qball</a>
+    <nav class="sections">
+      <a href="#why">Why Qball</a><a href="#lessons">Lessons</a><a href="#drills">Drills</a><a href="#play">Games</a>
+      <a href="#howto">How to play</a><a href="#offline">Offline</a><a href="#versions">Versions</a>
     </nav>
-    <div class="viewctl"><span>View</span>
-      <div class="seg" id="viewSeg">
-        <button data-view="2d" title="Top view only">2D</button>
-        <button data-view="split" class="active" title="Top view + cue view">Split</button>
-        <button data-view="3d" title="Cue view only (V cycles)">3D</button>
-      </div>
+    <a class="btn gh" href="https://github.com/afaisst/Qball" target="_blank" rel="noopener" title="Qball on GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
+    <a class="btn play" href="play.html">▶ Play</a>
+  </div>
+</header>
+
+<div class="hero" id="top">
+  <div class="wrap">
+    <img class="icon" src="assets/icon.svg" alt="Qball icon">
+    <h1>Qball</h1>
+    <p class="tag">A pool (billiards) simulator that knows the physics — for playing, practicing and learning.</p>
+    <div class="ctas">
+      <a class="btn play" href="play.html">▶ Play Qball</a>
+      <a class="btn" href="#howto">How to play</a>
     </div>
-    <label class="viewctl" title="Table size (the page reloads)"><span>Table</span>
-      <select id="selTable"><option value="9">9 ft</option><option value="8">8 ft</option><option value="7">7 ft</option></select></label>
-    <span id="testBadge" class="badge" hidden>TEST MODE</span>
-    <div id="status" class="status"></div>
-    <button id="btnHelp" class="hdrbtn" title="Controls and help (?)">? Help</button>
-    <button id="btnSettings" class="hdrbtn" title="Aiming aids, 3D view and other settings">⚙ Settings</button>
-    <button id="btnTouch" class="toggle" title="Touch mode: aim by dragging and shoot with the pull-down cue on the side (like on a tablet)">👆 Touch mode</button>
-    <label class="chk small"><input type="checkbox" id="optSound" checked> Sound</label>
-  </header>
+    <p class="note">No install, no account. Works with a mouse, on a tablet, and <a href="#offline">offline</a>.</p>
+    <img class="shot-main" src="assets/screenshot.png" alt="An 8-ball table after the break, aiming a 28° cut: the top view with the ghost ball and the cue-ball path, the 3D cue view below with the eclipse view, and the cue rack and spin controls on the right" data-caption="An 8-ball table after the break, aiming a 28° cut. Top view with the ghost ball and the cue-ball path, the 3D cue view below with the eclipse view, and the cue rack and spin controls on the right.">
+  </div>
+</div>
 
-  <main>
-    <div id="stage">
-      <div id="pane2d" class="pane"><canvas id="table"></canvas><canvas id="powerCue2" title="Drag the cue down to pull back, release to shoot"></canvas><div id="mapGrip" title="Drag to move the map">✥</div><div class="maphint" id="mapHint">click the map to stand up and walk · double-click: back to your shot</div></div>
-      <div id="pane3d" class="pane">
-        <canvas id="cueView"></canvas>
-        <canvas id="powerCue" title="Drag the cue down to pull back, release to shoot"></canvas>
-        <div class="vbar">
-          <span class="vtitle">Cue view</span>
-          <span class="vhint">drag ↔ to aim (Shift: fine) · pull the cue on the right ↓ and release to shoot · wheel: zoom</span>
-          <button id="btnSwap" class="mini" title="Swap the two views">⇄ swap</button>
-          <button id="btnHide3d" class="mini" title="Hide the cue view">✕</button>
-        </div>
-      </div>
-      <!-- "eclipse" inset: the view exactly along the cue line -->
-      <!-- scripted lessons: the coach card -->
-      <div id="coach" hidden>
-        <div class="ch-head"><span id="coachStep"></span><span id="coachDots" class="cdots"></span></div>
-        <h3 id="coachTitle"></h3>
-        <div id="coachBody"></div>
-        <div id="coachBtns" class="ch-btns"></div>
-      </div>
-      <div id="eclipse" hidden><canvas id="eclipseGL"></canvas><canvas id="eclipseOV"></canvas><div id="eclipseLabel"></div></div>
+<main class="wrap">
+
+<section id="why">
+  <h2><span class="kicker">Real physics, not animation</span>Why Qball?</h2>
+  <p class="lead">Most pool games animate the balls. <b>Qball simulates them.</b> Every ball carries a velocity <i>and</i> a spin, and everything you see follows from the physics of a real table.</p>
+  <div class="grid">
+    <div class="card"><h4><span class="dot"></span>Spin from the cue tip</h4><p>Where the tip meets the cue ball, how hard, and how steep the cue is decide the ball's speed and all three components of its spin: follow, draw, stun and side spin (english) — and, with a raised cue, swerve and massé. Hit too far from the centre and you miscue.</p></div>
+    <div class="card"><h4><span class="dot"></span>Sliding, then rolling</h4><p>A ball first slides over the cloth; friction turns the slide into roll (at 5/7 of the starting speed for a centre-ball hit). That is why a stop shot needs a sliding cue ball, and why a soft centre-ball hit follows.</p></div>
+    <div class="card"><h4><span class="dot"></span>Squirt</h4><p>Side spin pushes the cue ball slightly off the line you aim (cue deflection), just as with a real shaft.</p></div>
+    <div class="card"><h4><span class="dot"></span>Throw</h4><p>Friction between the balls bends the object ball's path a little: cut-induced throw (up to ~3.5° on a slow cut) and spin-induced throw, from a measured friction curve.</p></div>
+    <div class="card"><h4><span class="dot"></span>Real cushions</h4><p>The rebound uses a research model of the cushion impact (Mathavan et al. 2010), with friction at the cushion and at the slate. Running and reverse english change the angle off the rail, and a hard hit "shortens" the angle.</p></div>
+    <div class="card"><h4><span class="dot"></span>Real pockets</h4><p>The pocket jaws are modelled, so balls can rattle and hang. Pocketed balls drop in, roll around the pocket and stay there until you re-rack.</p></div>
+    <div class="card"><h4><span class="dot"></span>Real breaks</h4><p>In a rack the balls touch, so all the contacts act at once. Qball solves them together with an elastic contact model, so the break spreads through the rack the way it does on a real table — and a frozen combination passes its speed on to the far ball.</p></div>
+    <div class="card"><h4><span class="dot"></span>Jump shots</h4><p>A raised cue drives the cue ball into the slate, which throws it back up. A light jump cue gets out of the way and the ball flies over the ball in its path; a heavy cue held too steep pins it to the cloth. A ball can even fly off the table, drop to the floor and dent the wall.</p></div>
+    <div class="card"><h4><span class="dot"></span>Rail clearance</h4><p>Near a cushion the cue has to clear the rail: you can't hit the cue ball as low, unless you raise the cue.</p></div>
+  </div>
+  <div class="callout">The simulation has been <b>tested by a pool expert</b> against real shots — draw, follow, cuts, kicks and three-rail shots — and its settings were tuned until the table played like a real one.</div>
+</section>
+
+<section id="lessons">
+  <h2><span class="kicker">Learn</span>Lessons</h2>
+  <p class="lead">The <b>Lessons</b> tab teaches one idea at a time. The balls are set up for you, only the thing the lesson is about can be changed, and a lesson card on the table explains each step while the views move to show it.</p>
+  <div class="figs">
+    <figure><img src="assets/screenshots/lesson-ghost.jpg" alt="Lesson 1: the 2D view zoomed in on the ghost ball, with the line from the pocket through the 9-ball and the lesson card"><figcaption>Lesson 1: where the ghost ball is.</figcaption></figure>
+    <figure><img src="assets/screenshots/lesson-eclipse.jpg" alt="Lesson 1: the 3D view along the cue line at a 30° cut; the red dot on the edge of the 9-ball marks where to aim, the inset shows the half-ball eclipse"><figcaption>Lesson 1: a 30° cut seen along the cue line. You aim at the edge of the 9 — a half-ball hit.</figcaption></figure>
+  </div>
+  <div class="lesson"><div class="num">1</div><div><h4>Aiming with the ghost ball</h4>
+    <p>Where do you aim? At the <i>ghost ball</i>: the spot the cue ball has to take, touching the object ball on the line to the pocket. You see it from above, from behind the pocket and from the cue ball, in a straight shot and in 10°, 30° and 50° cuts. The aiming point moves from the centre of the object ball to its edge (30°, the half-ball hit) and into the air beside it (50°), and the <b>eclipse view</b> shows the easier way to aim: how much of the object ball the cue ball covers. Then you place the ghost ball yourself, aim and shoot, and Qball shows how far off you were.</p></div></div>
+  <div class="lesson two"><div class="num">2</div><div><h4>The stop shot</h4>
+    <p>Stop the cue ball dead where it hits the object ball. You try soft, medium and hard shots in the centre and a little below it, and see why a sliding cue ball stops and a rolling one follows.</p></div></div>
+  <p class="muted">More lessons are on the way.</p>
+</section>
+
+<section id="drills">
+  <h2><span class="kicker">Practice</span>Drills</h2>
+  <p class="lead">The <b>Drills</b> tab has practice routines you can also set up on a real table — each card shows the layout.</p>
+  <figure class="wide"><img src="assets/screenshots/drills.jpg" alt="The Drills tab: cards with the layout of each drill"></figure>
+  <div class="grid">
+    <div class="card"><h4><span class="dot"></span>Target drills</h4><p>Inspired by the Billiard University exam: straight-in, cut shots, stop shot, follow, draw, stun to a target and the wagon wheel. You start at level 4; a make moves you up a level, a miss moves you down. After 10 shots you get a score out of 10.</p></div>
+    <div class="card"><h4><span class="dot"></span>Pattern drills</h4><p>Ball in hand, then run the balls without missing — the L-drill, a long line-up, a cross line, balls frozen to the rails, the diamond grid, Dr. Dave's 3-ball drill, random layouts and "play the ghost". Ten tries each.</p></div>
+    <div class="card"><h4><span class="dot"></span>Free ball placement</h4><p>Put any of the 15 balls anywhere and practise the shot that's been giving you trouble.</p></div>
+  </div>
+</section>
+
+<section id="play">
+  <h2><span class="kicker">Play</span>8-ball, 9-ball, 10-ball</h2>
+  <div class="figs">
+    <figure><img src="assets/screenshots/break.jpg" alt="A 9-ball break with the break cue: the ball trails show the rack spreading over the whole table"><figcaption>A break with the break cue (ball trails on).</figcaption></figure>
+    <figure><img src="assets/screenshots/jump.jpg" alt="A jump shot seen from the side: the cue ball in the air above the 2-ball, its shadow on the cloth below"><figcaption>A jump shot with the jump cue, watched from the side in slow motion.</figcaption></figure>
+  </div>
+  <ul class="plain">
+    <li><b>9-ball and 10-ball</b> with the main rules for solo practice: hit the lowest ball first, and after contact pocket a ball or send one to a rail. Fouls give ball in hand; pocketing the 9 (or the 10) wins the rack.</li>
+    <li><b>8-ball:</b> the rack and the break (the full 8-ball rules are on the roadmap).</li>
+    <li><b>Free practice:</b> the cue ball and one object ball, re-spotted after each pot.</li>
+    <li><b>Break cue:</b> for the break, take the break cue from the cue rack (or press <kbd>B</kbd>). Its hard phenolic tip and an all-out stroke send the cue ball at up to ~13 m/s (about 30 mph), like a strong pro break. After the break you get your playing cue back.</li>
+    <li><b>Jump cue:</b> a ball in the way? Take the short jump cue (or press <kbd>J</kbd>). It starts raised to 50°: hit the cue ball firmly in the centre and it jumps over. Too soft, too steep or off centre and it stays on the cloth; too hard and it may fly off the table — a foul, ball in hand. The ball drops to the floor and rolls away; hit the wall hard and it leaves a dent (or cracks a painting's glass). <b>⚙ Settings → Repair the room</b> fixes it all.</li>
+  </ul>
+</section>
+
+<section id="howto">
+  <h2><span class="kicker">Controls</span>How to play</h2>
+  <h3>Shooting (mouse)</h3>
+  <table class="keys">
+    <tr><td>Aim</td><td>Move the mouse. <b>Click</b> to freeze the aim (so you can go to the panel), click again to release. <kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine). <kbd>Space</kbd> locks the aim.</td></tr>
+    <tr><td>Shoot</td><td>Press on the table, drag back to pull the cue, let go. The farther you pull, the harder the shot. <kbd>Esc</kbd> cancels.</td></tr>
+    <tr><td>Spin</td><td>Click or drag on the cue-ball picture, or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>. <kbd>C</kbd> centres it. Outside the dashed ring you miscue.</td></tr>
+    <tr><td>Cue elevation</td><td>Drag the side-view picture, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower.</td></tr>
+    <tr><td>Cue</td><td>Playing cue, break cue or jump cue in the cue rack; <kbd>B</kbd> break cue, <kbd>J</kbd> jump cue (again: back to the playing cue).</td></tr>
+    <tr><td>Ball in hand</td><td>Drag the cue ball where you want it.</td></tr>
+    <tr><td>View</td><td><b>2D</b>, <b>Split</b> or <b>3D</b> in the top bar; <kbd>V</kbd> cycles.</td></tr>
+    <tr><td>Help</td><td><b>? Help</b> (or <kbd>?</kbd>) lists all the controls in the game; <b>📖 Documentation</b> opens this page.</td></tr>
+  </table>
+  <div class="figs">
+    <figure><img src="assets/screenshots/spin.jpg" alt="Draw with a little left english: the cue-ball picture shows the tip low and left, and the cue-ball path curves back from the object ball"><figcaption>Spin: tip low and a little left. The light-blue line shows where the cue ball goes after the hit.</figcaption></figure>
+    <figure><img src="assets/screenshots/walk.jpg" alt="Walk mode: standing at a corner of the table in the billiard room, with the map in the lower left"><figcaption>Walk mode: look at the layout from anywhere around the table.</figcaption></figure>
+  </div>
+
+  <h3>The 3D view</h3>
+  <p>The 3D view is your eye down the cue, in a billiard room with a three-shade lamp and paintings on the walls.</p>
+  <ul class="plain">
+    <li><b>Aim:</b> drag left or right (<kbd>Shift</kbd> for fine steps). <b>Shoot:</b> pull the little cue on the right side down and let go.</li>
+    <li><b>Zoom:</b> the mouse wheel takes you from down on the shot to standing up. Keep zooming out to start walking.</li>
+    <li><b>After the shot</b> the camera pulls back so you can watch the whole table, then returns to your shot. A <b>jump shot</b> is shown from the side, low over the cloth, in slow motion while the ball is in the air.</li>
+    <li><b>Walk mode</b> (🚶 <b>Walk</b>, or click the map): stand up and walk around the table.
+      <ul class="plain">
+        <li>Walk with the arrow keys (<kbd>Shift</kbd> to go faster), or drag the blue dot on the map.</li>
+        <li>Drag the 3D view to look around: left/right turns, up/down tilts.</li>
+        <li>Double-click a ball, a spot on the table or a painting to lock your view on it; you keep facing it as you walk. Dragging the view unlocks it.</li>
+        <li>Press walk again, double-click the map or pick up the cue to go back to your shot, aiming the way you face.</li>
+      </ul></li>
+  </ul>
+
+  <h3>Aiming aids and settings</h3>
+  <p>Open <b>⚙ Settings</b> to switch each aid on or off (the choice is remembered):</p>
+  <ul class="plain">
+    <li><b>Aim line and ghost ball</b>, the <b>object ball's path</b> to the pocket, the <b>cue ball's path</b> after the hit (shows draw, follow and stun), and the <b>tangent line</b>.</li>
+    <li><b>Eclipse view:</b> a small inset looking straight along the cue line, showing how much of the object ball the cue ball covers (e.g. 50% for a half-ball hit).</li>
+    <li>A small <b>red cross</b> on the cue ball where the tip will hit (3D).</li>
+    <li><b>Ball trails</b> of the last shot, practice markings, realistic shadows, the after-shot overview and the slow-motion side view of jump shots.</li>
+  </ul>
+
+  <h3>Touch screens</h3>
+  <p>On a tablet, drag on the table to aim — start on the cue ball for fine aiming — and shoot with the pull-down cue at the side. In the 3D view, drag to aim and pinch to zoom. With a mouse, the <b>👆 Touch mode</b> button turns on the same controls.</p>
+
+  <h3>Table size</h3>
+  <p>Choose a <b>9 ft</b> tournament table (the default), an <b>8 ft</b> home table or a <b>7 ft</b> bar box in the top bar. Pockets and balls keep their regulation sizes.</p>
+
+  <h3>Test mode</h3>
+  <p>For the curious (the small <i>test mode</i> link at the bottom right, or <kbd>T</kbd>): place balls exactly, shoot with exact numbers, change every physics setting, replay shots in slow motion, read a full report of each shot, and copy a shot to share it. How the physics works is described in <a href="https://github.com/afaisst/Qball/blob/main/docs/physics.md" target="_blank" rel="noopener">the physics notes</a> on GitHub.</p>
+</section>
+
+<section id="offline">
+  <h2><span class="kicker">No internet needed</span>Play offline</h2>
+  <p class="lead">Qball is a plain web page: no install, no server, no internet connection needed once you have the files.</p>
+  <ol class="steps">
+    <li>Go to <a href="https://github.com/afaisst/Qball" target="_blank" rel="noopener">Qball on GitHub</a>, click the green <b>Code</b> button and choose <b>Download ZIP</b>.</li>
+    <li>Unzip the file anywhere on your computer.</li>
+    <li>Open <code>index.html</code> in any modern browser (Chrome, Edge, Firefox or Safari) — double-click it, or drag it onto a browser window. It opens this guide; click <b>▶ Play</b> to go to the table. (<code>play.html</code> takes you straight to the table.)</li>
+  </ol>
+  <p>Or, with git:</p>
+<pre>git clone https://github.com/afaisst/Qball.git
+cd Qball
+open play.html         <span class="c"># the table (macOS); on Windows/Linux, double-click play.html</span>
+open index.html        <span class="c"># this guide</span></pre>
+</section>
+
+<section id="versions">
+  <h2><span class="kicker">What's new</span>Version history</h2>
+  <ul class="timeline">
+    <li><span class="ver">1.7</span><span class="date">6 Nov 2026</span><p><b>Jump shots:</b> the ball leaves the cloth when the cue is raised and hit firmly, flies, bounces when it lands, can hit balls on the way down and can jump off the table. A short, light <b>jump cue</b>, and a slow-motion side view of every jump in 3D. A ball that flies off the table is a foul (ball in hand); it falls to the floor, bounces off the walls — denting the panelling or cracking a painting's glass — and rolls away. Touch-friendly hints in touch mode. This guide, now the landing page (the game moved to <code>play.html</code>).</p></li>
+    <li><span class="ver">1.6</span><span class="date">6 Nov 2026</span><p><b>Full walk mode:</b> walk with the arrow keys, look around (and up and down) by dragging the 3D view; clicking the map just stands you up where you are. New README and screenshots.</p></li>
+    <li><span class="ver">1.5</span><span class="date">6 Nov 2026</span><p><b>Realistic breaks:</b> touching balls now collide all at once, with an elastic contact model, so the break spreads through the rack instead of sending one ball out of the back. <b>Break cue</b> and a cue rack.</p></li>
+    <li><span class="ver">1.4</span><span class="date">2 Nov 2026</span><p><b>Lesson 1, aiming with the ghost ball:</b> the first scripted lesson, with a lesson card, 2D zoom and 3D camera moves; you place the ghost ball yourself at the end.</p></li>
+    <li><span class="ver">1.3</span><span class="date">29 Oct 2026</span><p><b>The billiard room:</b> 7, 8 and 9 ft tables; real cushion profile and rounded rails; a three-shade lamp with soft ball shadows; paintings by Swiss artists and a door; Settings and Help pop-ups; new, more natural sounds; movable panels.</p></li>
+    <li><span class="ver">1.2</span><span class="date">29 Oct 2026</span><p><b>Tablets and a better 3D view:</b> touch controls and a phone/portrait layout; a reworked walk mode (drag the dot, turn with the view cone, keep looking at a spot); the eclipse view and the tip mark; cloth, wood and ball textures; the overview camera after the shot; balls that drop into the pockets and stay there; the Lessons tab with the stop shot; table legs, rug and walls.</p></li>
+    <li><span class="ver">1.0</span><span class="date">28 Oct 2026</span><p><b>First version:</b> the physics engine (sliding and rolling, spin, squirt, swerve and massé, throw, miscues, research-based cushions, rail clearance), 2D top view and 3D cue view (with walking around the table), 8-, 9- and 10-ball, target and pattern drills, free ball placement, and test mode.</p></li>
+  </ul>
+  <h3>Coming up</h3>
+  <ul class="plain">
+    <li>8-ball rules and a two-player mode (turns, fouls, groups, called shots)</li>
+    <li>Break rules for 9- and 10-ball, push-out, the three-foul rule</li>
+    <li>More lessons and drills, including jump shots</li>
+  </ul>
+</section>
+
+<section id="art">
+  <h2><span class="kicker">In the 3D room</span>The paintings</h2>
+  <ul class="plain">
+    <li><b>Public domain</b> (via Wikimedia Commons): Ferdinand Hodler, <i>Lake Thun with Symmetrical Reflection</i> (1905), <i>The Niesen</i> (1910) and <i>Lake Geneva from Chexbres</i> (1905); Albert Anker, <i>The Village School of 1848</i> (1896); Arnold Böcklin, <i>Isle of the Dead</i> (first version, 1880); Félix Vallotton, <i>Sunset at Grasse</i> (1918); Giovanni Giacometti, <i>Maloja in Winter</i>; Paul Klee, <i>Senecio</i> (1922).</li>
+    <li><b>Rainer Oberhänsli</b>, two <i>Horizont</i> paintings — © the artist, used with his permission (<a href="http://www.raineroberhaensli.ch/galerie.htm" target="_blank" rel="noopener">raineroberhaensli.ch</a>). They may not be reused without the artist's permission.</li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <a class="btn play" href="play.html">▶ Play Qball</a>
+      <a class="btn" href="https://github.com/afaisst/Qball" target="_blank" rel="noopener">Source code, issues and physics notes on GitHub</a>
     </div>
+    <p>Created by Andreas Faisst. Physics after D. G. Alciatore (Dr. Dave), S. Mathavan et al. and H. Han. Drills inspired by the <a href="https://billiarduniversity.org/" target="_blank" rel="noopener">Billiard University</a> exams and <a href="https://drdavepoolinfo.com/" target="_blank" rel="noopener">Dr. Dave's drill pages</a> (ball positions are approximations, not the official diagrams). The 3D view uses <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> (MIT license).</p>
+  </div>
+</footer>
 
-    <!-- Menus (Games / Drills) -->
-    <div id="menu" hidden>
-      <div class="menu-inner">
-        <div id="menuLessons" class="menu-page" hidden>
-          <h1>Lessons <small>step-by-step introductions — the shot is set up for you, you try it and see why it works</small></h1>
-          <div id="lessonCards" class="cards"></div>
-        </div>
-        <div id="menuGames" class="menu-page">
-          <h1>Games <small>practice — one player for now</small></h1>
-          <div id="gameCards" class="cards"></div>
-        </div>
-        <div id="menuDrills" class="menu-page" hidden>
-          <h1>Drills <small>target drills: start at level 4, make it → level up, miss → down · pattern drills: ball in hand, run the balls · 10 tries each</small></h1>
-          <div id="drillCards" class="cards"></div>
-          <p class="credit">Drills inspired by the <a href="https://billiarduniversity.org/testing/exams/" target="_blank" rel="noopener">Billiard University</a> exams (F1–F5, F7) and <a href="https://drdavepoolinfo.com/?p=2037" target="_blank" rel="noopener">Dr. Dave's drill pages</a> (line-of-balls, 3-ball drill, playing the ghost). Ball positions are our own approximations, not the official diagrams.</p>
-        </div>
-      </div>
-    </div>
-
-    <aside id="panel">
-      <!-- current game / drill -->
-      <section id="activity">
-        <div class="act-head"><span id="actTitle">Free practice</span><button id="btnMenu" class="mini">menu</button></div>
-        <div id="actInfo" class="note"></div>
-        <div id="drillHud" hidden>
-          <div class="levels" id="levelDots"></div>
-          <div class="kv"><span id="drillShotLbl">Shot</span><b id="drillShot">1 / 10</b></div>
-          <div class="kv"><span id="drillScoreLbl">Score</span><b id="drillScore">–</b></div>
-          <div id="drillResult" class="result"></div>
-        </div>
-        <div id="lessonHud" hidden>
-          <div id="lessonSteps" class="lsteps"></div>
-          <div class="lmeter"><span>Strength</span><div id="lessonBands" class="lbands"></div></div>
-          <div id="lessonResults" class="lresults"></div>
-          <div class="row"><button id="btnLessonHelp">Show the instructions</button></div>
-        </div>
-        <div id="trayBox" hidden><div class="tray-label" id="trayLabel">Balls</div><div id="tray" class="tray"></div></div>
-        <div class="row">
-          <button id="btnRack">Re-rack</button>
-          <button id="btnEasier" class="drill-only" hidden title="Go down one level">◀ easier</button>
-          <button id="btnHarder" class="drill-only" hidden title="Go up one level">harder ▶</button>
-          <button id="btnArrange" class="toggle place-only" hidden title="Arrange mode: drag any ball; off = shoot">✋ Arrange balls (M)</button>
-          <button id="btnRestoreSetup" class="place-only" hidden title="Put the balls back where they were before the last shot">↺ Last setup</button>
-        </div>
-      </section>
-
-      <section id="sec3d" hidden>
-        <h2>3D view</h2>
-        <div class="bigbtns">
-          <button id="btnWalk" class="big toggle" title="Stand up and walk around the table: move with the blue dot on the map, turn with the view cone">🚶 Walk</button>
-          <button id="btnMap" class="big toggle" title="Show the small top-view map">🗺 Map</button>
-        </div>
-      </section>
-
-      <section>
-        <h2>Cue</h2>
-        <div id="cueRack" class="cuerack" title="Your cues — B switches"></div>
-        <div class="pads">
-          <div class="pad">
-            <canvas id="tipPad" title="Click/drag: where the tip hits (as seen down the cue). Beyond the dashed ring = miscue. Double-click to center."></canvas>
-            <div class="padlabel">Spin · <span id="tipVal" class="tipval">center</span></div>
-            <button id="btnTipCenter" class="mini">center (C)</button>
-          </div>
-          <div class="pad">
-            <canvas id="elevPad" title="Drag to raise the cue butt. Double-click for a level cue."></canvas>
-            <div class="padlabel">Cue · <span id="elevVal" class="tipval">level</span></div>
-            <button id="btnLevel" class="mini">level</button>
-          </div>
-        </div>
-        <div class="power"><div class="bar"><div id="powerFill"></div></div></div>
-        <div class="test-only readouts">
-          <div class="kv"><span>Cue speed</span><b id="powerVal">0.00 m/s</b></div>
-          <div class="kv"><span>→ Cue-ball speed</span><b id="ballSpeedVal">0.00 m/s</b></div>
-          <div class="kv"><span>Squirt</span><b id="squirtVal">–</b></div>
-          <div class="kv"><span>Aim angle</span><b id="aimVal">–</b></div>
-          <div class="kv"><span>Cut angle</span><b id="cutVal">–</b></div>
-          <div class="kv"><span>Aim lock (Space)</span><b id="lockVal">off</b></div>
-        </div>
-      </section>
-
-
-      <div class="test-only">
-        <section>
-          <h2>Setup <small>meters, origin = table center</small></h2>
-          <table class="pos">
-            <tr><th></th><th>x</th><th>y</th></tr>
-            <tr><td><i class="dot cue"></i>Cue</td><td><input id="cbx" type="number" step="0.001"></td><td><input id="cby" type="number" step="0.001"></td></tr>
-            <tr><td><i class="dot ob" id="obDot"></i><span id="obName">Object</span></td><td><input id="obx" type="number" step="0.001"></td><td><input id="oby" type="number" step="0.001"></td></tr>
-          </table>
-          <div class="row">
-            <button id="btnMove" class="toggle">✋ Move balls (M)</button>
-            <button id="btnRestore" title="Put the balls back where they were before the last shot">Restore setup</button>
-          </div>
-          <div class="note">Cue ball can always be dragged. Hold <kbd>Shift</kbd> or use Move mode to drag other balls (the last one dragged is shown above).</div>
-        </section>
-
-        <section>
-          <h2>Shoot precisely</h2>
-          <div class="grid2">
-            <label>Aim angle (°)<input id="inAim" type="number" step="0.01"></label>
-            <label>Cue speed (m/s)<input id="inSpeed" type="number" step="0.05" min="0.05" value="2.00"></label>
-            <label>Cut angle (°)<input id="inCut" type="number" step="0.1" value="30"></label>
-            <div class="btncell"><button id="btnSetCut" title="Rotate aim so the ghost-ball cut angle on the selected ball equals this value">Set cut</button></div>
-            <label>Tip x (R, + right)<input id="inTipX" type="number" step="0.01" min="-0.95" max="0.95" value="0"></label>
-            <label>Tip y (R, + up)<input id="inTipY" type="number" step="0.01" min="-0.95" max="0.95" value="0"></label>
-            <label>Elevation (°)<input id="inElev" type="number" step="0.5" min="0" max="80" value="0"></label>
-          </div>
-          <div class="row">
-            <button id="btnShoot" class="primary">Shoot (Enter)</button>
-            <button id="btnReplay" title="Restore last setup and repeat last shot exactly">Replay (R)</button>
-            <button id="btnStop">Stop (X)</button>
-          </div>
-        </section>
-
-        <section>
-          <h2>Share / reproduce a shot</h2>
-          <div class="row" style="margin-top:0">
-            <button id="btnCopyShot" title="Copy the last shot (start positions, aim, speed, tip, elevation, all physics settings)">Copy last shot</button>
-            <button id="btnLoadShot" title="Paste a shot to set it up again">Load shot…</button>
-          </div>
-          <div id="shareBox" hidden>
-            <textarea id="shotText" rows="5" spellcheck="false" placeholder="Paste a shot here"></textarea>
-            <div class="row"><button id="btnApplyShot">Set up</button><button id="btnApplyShoot" class="primary">Set up &amp; shoot</button></div>
-          </div>
-          <div class="note">Paste a copied shot into the chat and I can replay it exactly.</div>
-        </section>
-
-        <section>
-          <h2>Display</h2>
-          <label class="chk"><input type="checkbox" id="optContacts" checked> Contact (ghost) positions with trails</label>
-          <label class="chk"><input type="checkbox" id="optPredict"> Predicted paths (full physics preview)</label>
-          <label class="slider">Time scale <b id="tsVal">1.00×</b><input id="optTimeScale" type="range" min="0.02" max="1" step="0.01" value="1"></label>
-          <label class="slider">3D overview: set-back behind the cue ball <b id="ovBackVal">1.80 m</b><input id="optOvBack" type="range" min="0.5" max="4" step="0.05" value="1.8"></label>
-          <label class="slider">3D overview: camera height <b id="ovHeightVal">0.90 m</b><input id="optOvHeight" type="range" min="0.6" max="3.5" step="0.05" value="0.9"></label>
-          <label class="slider">3D aiming view: extra set-back along the cue <b id="aimBackVal">22 cm</b><input id="optAimBack" type="range" min="-0.3" max="1.2" step="0.01" value="0.22"></label>
-        </section>
-
-        <section>
-          <h2>Physics <button id="btnDefaults" class="mini">defaults</button></h2>
-          <div id="params"></div>
-        </section>
-
-        <section>
-          <h2>Shot report</h2>
-          <div id="report" class="report"><span class="muted">Take a shot…</span></div>
-        </section>
-
-        <section>
-          <h2>Live</h2>
-          <div id="live" class="report"></div>
-        </section>
-      </div>
-
-    </aside>
-  </main>
-  <a id="lnkTest" class="testlink" href="#" title="Physics test mode (T)">test mode</a>
-  <div id="helpModal" hidden><div class="lbox">
-    <h2>Help · controls</h2>
-    <ul>
-          <li><b>Aim:</b> move the mouse · <b>click</b> to freeze the aim (click again to release) · <kbd>←</kbd><kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine) · <kbd>Space</kbd> lock aim</li>
-          <li><b>Shoot:</b> press anywhere, drag back, release · <kbd>Esc</kbd> cancels</li>
-          <li><b>Touch (iPad / tablet, or the 👆 Touch mode button):</b> drag a finger on the table to aim; start the drag on the cue ball for fine aiming. Shoot with the cue on the right: pull it down and let go. In 3D, drag to aim and pinch to zoom; double-tap the map to return to your shot.</li>
-          <li><b>Spin:</b> click the cue ball diagram, or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>C</kbd> center</li>
-          <li><b>Cue:</b> pick the playing cue or the break cue in the panel, or <kbd>B</kbd> to switch (after a break in a game you get the playing cue back)</li>
-          <li><b>Cue elevation:</b> drag the side view, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower</li>
-          <li><b>Ball in hand:</b> drag the cue ball where you want it</li>
-          <li><b>View</b> (top bar): 2D, split or 3D only · <kbd>V</kbd> cycles</li>
-          <li><b>Walk around</b> (3D only): press <b>🚶 Walk</b> (right panel), or keep zooming out once you're standing. On the map, drag the blue dot to move (or click where to go — you walk around the table) and drag the blue view cone, or the crosshair itself (it snaps onto balls), to pick a spot on the table to look at — you keep facing it as you walk. Or double-click (double-tap) a ball or spot in the 3D view. Or walk with the <kbd>↑</kbd><kbd>↓</kbd> (forward / back) and <kbd>←</kbd><kbd>→</kbd> (sideways) keys, <kbd>Shift</kbd> to go faster, and drag the 3D view to look around (left/right turns, up/down tilts). Dragging the view unlocks the spot you were facing; double-click a spot to lock onto it again. The wheel (or a pinch) on the 3D view bends you down. The cue walks with you (shown see-through): press walk again, double-click the map or pick up the cue to go back to your shot, aiming the way you face. Drag the map by its ✥ grip.</li>
-          <li><b>Cue view:</b> drag ↔ to aim, pull the side cue ↓ and release to shoot · wheel: zoom (in = down on the shot, out = standing up)</li>
-        </ul>
-    <p class="note">Settings (⚙) has the aiming aids and display options; Lessons, Games and Drills are in the tabs at the top. The test mode link (bottom right, or <kbd>T</kbd>) opens the physics tools.</p>
-    <div class="lbtns"><button id="btnHelpClose" class="primary">Close</button></div>
-  </div></div>
-  <div id="settingsModal" hidden><div class="lbox">
-    <h2>Settings</h2>
-    <div class="sgrid">
-      <div>
-        <h3>Aiming aids</h3>
-        <label class="chk"><input type="checkbox" id="optAimLine" checked> Aim line &amp; object-ball path</label>
-        <label class="chk"><input type="checkbox" id="optGhost" checked> Ghost ball</label>
-        <label class="chk"><input type="checkbox" id="optCBPath" checked> Cue-ball path</label>
-        <div id="previewVal" class="note test-only" style="margin:-2px 0 4px 24px"></div>
-        <label class="chk"><input type="checkbox" id="optTangent" checked> Tangent line (90° rule)</label>
-        <label class="chk"><input type="checkbox" id="optSquirtLine"> Aim line includes squirt &amp; swerve</label>
-        <label class="chk"><input type="checkbox" id="optTrails"> Ball trails of the last shot</label>
-        <h3>Table</h3>
-        <label class="chk"><input type="checkbox" id="optGrid"> Practice markings (diamond grid dots)</label>
-      </div>
-      <div>
-        <h3>3D view</h3>
-        <label class="chk"><input type="checkbox" id="optTipMark" checked> Tip contact point on the cue ball</label>
-        <label class="chk"><input type="checkbox" id="optEclipse"> Eclipse view (along the cue line)</label>
-        <label class="chk"><input type="checkbox" id="optOverview" checked> Overview of the table while the balls roll</label>
-        <label class="chk"><input type="checkbox" id="optShadows" checked> Realistic shadows (three lamps)</label>
-        <div class="note" style="margin:-2px 0 4px 24px">Off: one steady light from above (faster on older devices).</div>
-      </div>
-    </div>
-    <div class="lbtns"><button id="btnSettingsDefaults">Defaults</button><button id="btnSettingsClose" class="primary">Done</button></div>
-  </div></div>
-  <div id="lessonModal" hidden><div class="lbox"><h2 id="lmTitle"></h2><div id="lmBody"></div><div id="lmBtns" class="lbtns"></div></div></div>
-
-  <script src="js/vendor/three.min.js"></script>
-  <script src="js/constants.js"></script>
-  <script src="js/table.js"></script>
-  <script src="js/physics.js"></script>
-  <script src="js/render.js"></script>
-  <script src="js/audio.js"></script>
-  <script src="js/setups.js"></script>
-  <script src="js/lessons.js"></script>
-  <script src="js/textures.js"></script>
-  <script src="js/art.js"></script>
-  <script src="js/view3d.js"></script>
-  <script src="js/main.js"></script>
+<div id="viewer" role="dialog" aria-label="Screenshot"><div><img alt=""><p></p></div></div>
+<script>
+  // click a screenshot to see it large; click again (or Esc) to close
+  const viewer = document.getElementById('viewer'), vImg = viewer.querySelector('img'), vCap = viewer.querySelector('p');
+  for (const img of document.querySelectorAll('figure img, img.shot-main')) {
+    img.addEventListener('click', () => {
+      vImg.src = img.src; vImg.alt = img.alt;
+      const fc = img.closest('figure') && img.closest('figure').querySelector('figcaption');
+      vCap.textContent = img.dataset.caption || (fc ? fc.textContent : '');
+      viewer.classList.add('on');
+    });
+  }
+  viewer.addEventListener('click', () => viewer.classList.remove('on'));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') viewer.classList.remove('on'); });
+</script>
 </body>
 </html>

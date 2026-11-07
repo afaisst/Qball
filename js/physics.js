@@ -24,6 +24,7 @@ window.QB = window.QB || {};
       this.x = x; this.y = y;
       this.vx = 0; this.vy = 0;
       this.wx = 0; this.wy = 0; this.wz = 0;
+      this.z = R; this.vz = 0;            // height of the centre above the slate (R = on the cloth) and vertical speed
       this.onTable = true;
       this.pocketedIn = null;
       // body-fixed axes expressed in world frame (for rendering rotation)
@@ -33,14 +34,16 @@ window.QB = window.QB || {};
     }
     get speed() { return Math.hypot(this.vx, this.vy); }
     slip() { return Math.hypot(this.vx - R * this.wy, this.vy + R * this.wx); }
+    airborne() { return this.vz !== 0 || this.z > R + 1e-7; }
     motion() {
       if (!this.onTable) return 'off';
+      if (this.airborne()) return 'airborne';
       if (this.slip() > C.U_EPS) return 'sliding';
       if (this.speed > C.V_EPS) return 'rolling';
       if (Math.abs(this.wz) > 1e-3) return 'spinning';
       return 'stopped';
     }
-    stop() { this.vx = this.vy = this.wx = this.wy = this.wz = 0; }
+    stop() { this.vx = this.vy = this.wx = this.wy = this.wz = 0; this.vz = 0; this.z = R; }
     snapshot() { return { id: this.id, num: this.num, x: this.x, y: this.y, onTable: this.onTable }; }
   }
   QB.Ball = Ball;
@@ -85,7 +88,12 @@ window.QB = window.QB || {};
   // normal <= tip friction), otherwise the tip slides (MISCUE) and k = normal + mu_kinetic * tangent.
   // Magnitude (restitution e_tip along k, cue constrained to move along its axis):
   //   F = (1+e_tip) V (e.k) / ( (e.k)^2/M + 1/m + |OP x k|^2 / I )
-  // Ball: dv = F k / m (vertical part absorbed by the slate, no jumping yet), dw = OP x F k / I.
+  // Ball: dv = F k / m, dw = OP x F k / I.
+  // Raised cue (jump and massé shots): the downward part of the impulse drives the ball into the slate, which throws
+  // it back up (restitution eTable, with cloth friction at the bottom of the ball). The cue is still moving forward
+  // and down, so the rising ball can meet the tip again: further cue contacts are applied as long as the tip still
+  // closes on the ball. A heavy cue keeps pushing the ball back down (it can hardly jump it); a short, light jump cue
+  // is stopped by the first contact and gets out of the way, so the ball leaves the cloth.
   // Squirt (shaft end mass m_e) rotates the launch direction away from the english side:
   //   tan(s) = 5/2 (a/R) sqrt(1-(a/R)^2) / (1 + m/m_e + 5/2 (1-(a/R)^2))
   QB.cueImpact = function (P, cueSpeed, aim, tipX = 0, tipY = 0, elev = 0) {
@@ -127,8 +135,30 @@ window.QB = window.QB || {};
       const cs = Math.cos(squirt), sn = Math.sin(squirt);
       [vx, vy] = [vx * cs - vy * sn, vx * sn + vy * cs];
     }
+    let vz = Fm * k[2] / m, bounces = 0, hits = 1;
+    if (vz < -1e-6) {
+      const den = ek * ek / M + 1 / m + L2 / I, eS = P.eTable !== undefined ? P.eTable : 0.5, muS = P.muSlide;
+      let Vc = cueSpeed - Fm * ek / M;                         // the cue's speed along its axis after the first contact
+      for (let it = 0; it < 12; it++) {
+        if (vz < 0) {                                           // the slate throws the ball back up
+          const jn = (1 + eS) * -vz; vz = -eS * vz; bounces++;
+          const ux = vx - R * w[1], uy = vy + R * w[0], sl = Math.hypot(ux, uy);
+          if (sl > 1e-9) {                                      // cloth friction at the bottom of the ball
+            const jt = Math.min(muS * jn, sl * 2 / 7), hx = ux / sl, hy = uy / sl;
+            vx -= jt * hx; vy -= jt * hy; w[0] -= 5 * jt * hy / (2 * R); w[1] += 5 * jt * hx / (2 * R);
+          }
+        }
+        const close = Vc * ek - (vx * k[0] + vy * k[1] + vz * k[2]);   // is the tip still closing on the ball?
+        if (close <= 1e-4) break;
+        const F2 = (1 + eT) * close / den;
+        vx += F2 * k[0] / m; vy += F2 * k[1] / m; vz += F2 * k[2] / m;
+        w[0] += F2 * L[0] / I; w[1] += F2 * L[1] / I; w[2] += F2 * L[2] / I;
+        Vc -= F2 * ek / M; hits++;
+      }
+      if (vz < 0.02) vz = 0;                                    // (too little to leave the cloth)
+    } else vz = 0;
     const speed = Math.hypot(vx, vy);
-    return { speed, vx, vy, w, squirt, miscue, angle: speed > 1e-9 ? Math.atan2(vy, vx) : aim, vz: Fm * k[2] / m, tanA, mu };
+    return { speed, vx, vy, w, squirt, miscue, angle: speed > 1e-9 ? Math.atan2(vy, vx) : aim, vz, hits, bounces, tanA, mu };
   };
   // Largest tip offset at which the tip can still hold (miscue limit), in units of R.
   QB.miscueLimit = function (P) { const mu = P.tipFriction; return mu / Math.sqrt(1 + mu * mu); };
@@ -275,7 +305,7 @@ window.QB = window.QB || {};
     // Cue strike: cue (stick) speed V along `aim`, tip offset (tipX, tipY) in R, cue elevation `elev` (rad).
     cueStrike(ball, cueSpeed, aim, tipX = 0, tipY = 0, elev = 0) {
       const imp = QB.cueImpact(this.params, cueSpeed, aim, tipX, tipY, elev);
-      ball.vx = imp.vx; ball.vy = imp.vy;
+      ball.vx = imp.vx; ball.vy = imp.vy; ball.vz = imp.vz; ball.z = R; ball.zMax = R;
       ball.wx = imp.w[0]; ball.wy = imp.w[1]; ball.wz = imp.w[2];
       this.events.push({ type: 'strike', t: this.time, ball: ball.id, speed: imp.speed, angle: imp.angle,
         tipX, tipY, elev, cueSpeed, aim, squirt: imp.squirt, miscue: imp.miscue });
@@ -312,11 +342,43 @@ window.QB = window.QB || {};
       return true;
     }
 
+    // A ball coming down on the cloth: it bounces (restitution eTable) with cloth friction at the bottom of the ball
+    // (which turns some of the spin into speed and back); small bounces end on the cloth.
+    land(b) {
+      const P = this.params, vin = -b.vz, eS = P.eTable !== undefined ? P.eTable : 0.5;
+      b.z = R;
+      if (b.overRail) { this.offTable(b); return; }             // came down on the rail: off the table
+      const jn = (1 + eS) * vin;
+      b.vz = vin * eS > 0.12 ? vin * eS : 0;
+      const ux = b.vx - R * b.wy, uy = b.vy + R * b.wx, sl = Math.hypot(ux, uy);
+      if (sl > 1e-9) {
+        const jt = Math.min(P.muSlide * jn, sl * 2 / 7), hx = ux / sl, hy = uy / sl;
+        b.vx -= jt * hx; b.vy -= jt * hy; b.wx -= 5 * jt * hy / (2 * R); b.wy += 5 * jt * hx / (2 * R);
+      }
+      if (vin > 0.05) this.events.push({ type: 'bounce', t: this.time, ball: b.id, speed: vin, x: b.x, y: b.y });
+    }
+    offTable(b) {
+      b.onTable = false; b.pocketedIn = null; b.offTable = true; b.overRail = false;
+      const ev = { type: 'offtable', t: this.time, ball: b.id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz };   // (for the flight animation)
+      b.stop();
+      this.events.push(ev);
+    }
+
     // Analytic motion of one ball over time h (no collisions).
     advanceBall(b, h) {
       const P = this.params, g = C.G;
       let guard = 0;
       while (h > 1e-12 && guard++ < 6) {
+        if (b.airborne()) {                                     // ---- in the air: a parabola, the spin stays ----
+          const tl = (b.vz + Math.sqrt(Math.max(0, b.vz * b.vz + 2 * g * (b.z - R)))) / g;   // time to land
+          const tau = Math.max(0, Math.min(h, tl));
+          b.x += b.vx * tau; b.y += b.vy * tau; b.z += b.vz * tau - 0.5 * g * tau * tau; b.vz -= g * tau;
+          rotateBody(b, b.wx * tau, b.wy * tau, b.wz * tau);
+          if (!(b.z <= b.zMax)) b.zMax = b.z;
+          if (tau >= tl - 1e-12) this.land(b);
+          h -= tau;
+          continue;
+        }
         const ux = b.vx - R * b.wy, uy = b.vy + R * b.wx;
         const slip = Math.hypot(ux, uy);
         const sp = Math.hypot(b.vx, b.vy);
@@ -472,6 +534,26 @@ window.QB = window.QB || {};
             const b = balls[j]; if (!b.onTable) continue;
             const px = b.x - a.x, py = b.y - a.y, d2 = px * px + py * py;
             if (d2 >= D2 - 1e-12) continue;
+            if (a.airborne() || b.airborne()) {                 // one of them is in the air: a 3D collision (or it flies over)
+              const pz = b.z - a.z, d3 = Math.sqrt(d2 + pz * pz);
+              if (d3 >= D) continue;
+              const nx = px / d3, ny = py / d3, nz = pz / d3;
+              const vrel = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny + (a.vz - b.vz) * nz;
+              if (vrel > 0) {
+                const pre = { avx: a.vx, avy: a.vy, bvx: b.vx, bvy: b.vy, aSlip: a.slip(), bSlip: b.slip(), aw: [a.wx, a.wy, a.wz], bw: [b.wx, b.wy, b.wz] };
+                const J = (1 + P.eBall) / 2 * vrel;
+                a.vx -= J * nx; a.vy -= J * ny; a.vz -= J * nz; b.vx += J * nx; b.vy += J * ny; b.vz += J * nz;
+                for (const q of [a, b]) if (q.z <= R + 1e-7 && q.vz < 0) q.vz = 0;      // a ball on the cloth: the slate takes the push down
+                this.events.push({ type: 'ball', t: this.time, a: a.id, b: b.id, speed: vrel, nx: px / Math.sqrt(d2), ny: py / Math.sqrt(d2),
+                  ax: a.x, ay: a.y, bx: b.x, by: b.y, pre, post: { avx: a.vx, avy: a.vy, bvx: b.vx, bvy: b.vy }, throwJ: 0, air: true });
+                hit = true;
+              }
+              const push = (D - d3) / 2 + 1e-9;                  // separate (a ball on the cloth stays on it)
+              const ag = a.z <= R + 1e-7, bg = b.z <= R + 1e-7;
+              a.x -= nx * push; a.y -= ny * push; if (!ag) a.z = Math.max(R, a.z - nz * push);
+              b.x += nx * push; b.y += ny * push; if (!bg) b.z = Math.max(R, b.z + nz * push);
+              continue;
+            }
             const wx = b.vx - a.vx, wy = b.vy - a.vy;
             const pw = px * wx + py * wy;
             // balls touching (or almost touching) other balls -- a rack, frozen balls -- collide all at once
@@ -523,11 +605,27 @@ window.QB = window.QB || {};
           }
         }
         // ---- ball-cushion ----
+        const hN = (P.cushionHeight || C.CUSHION_H_FRAC) * 2 * R;     // cushion nose height above the slate
         for (const b of balls) {
           if (!b.onTable) continue;
+          const air = b.airborne();
           for (const sg of segs) {
             const q = QB.closestOnSeg(sg, b.x, b.y);
             let nx = b.x - q.x, ny = b.y - q.y; const d = Math.hypot(nx, ny);
+            if (air) {
+              // in the air: if the bottom of the ball is above the rubber nose it flies over the cushion; otherwise
+              // it hits the rubber, which bounces it back like a wall and takes some of its up/down motion
+              if (b.z - R > hN || d >= R || d === 0) continue;
+              nx /= d; ny /= d;
+              const vn = b.vx * nx + b.vy * ny;
+              if (vn >= 0) { b.x += nx * (R - d); b.y += ny * (R - d); continue; }
+              const k = (1 + P.eCushion) * vn;
+              b.vx -= k * nx; b.vy -= k * ny; b.vz *= 0.5;
+              b.x += nx * (R - d); b.y += ny * (R - d);
+              this.events.push({ type: 'cushion', t: this.time, ball: b.id, cushion: sg.cushion, part: sg.kind, speed: -vn });
+              hit = true;
+              continue;
+            }
             if (d >= R || d === 0) continue;
             nx /= d; ny /= d;
             const vn = b.vx * nx + b.vy * ny;
@@ -560,6 +658,15 @@ window.QB = window.QB || {};
       const T = this.table;
       for (const b of this.balls) {
         if (!b.onTable) continue;
+        if (b.airborne()) {
+          // flying over the cushions? Past the rail it is off the table; coming down on the cushion or rail also is
+          // (see land()). Near a pocket the ball can still drop in once it comes down.
+          const out = Math.max(Math.abs(b.x) - T.L2, Math.abs(b.y) - T.W2);
+          const nearPocket = T.pockets.some(p => Math.hypot(b.x - p.x, b.y - p.y) < p.r + 0.05);
+          b.overRail = out > 0.005 && !nearPocket;
+          if (out > C.CUSHION_W + 0.06) { this.offTable(b); continue; }
+          if (b.z > R + 0.01) continue;                          // high in the air: it flies over the pockets
+        }
         for (const p of T.pockets) {
           if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < p.r * p.r) { this.pocket(b, p); break; }
         }
@@ -587,7 +694,7 @@ window.QB = window.QB || {};
       const w = new World(this.table, Object.assign({}, this.params));
       for (const b of this.balls) {
         const c = new Ball(b.id, b.num, b.x, b.y);
-        Object.assign(c, { vx: b.vx, vy: b.vy, wx: b.wx, wy: b.wy, wz: b.wz, onTable: b.onTable });
+        Object.assign(c, { vx: b.vx, vy: b.vy, wx: b.wx, wy: b.wy, wz: b.wz, z: b.z, vz: b.vz, onTable: b.onTable });
         c.ax = b.ax.slice(); c.ay = b.ay.slice(); c.az = b.az.slice();
         w.balls.push(c);
       }
