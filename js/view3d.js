@@ -592,7 +592,7 @@ window.QB = window.QB || {};
       const e = this.lastPose ? this.lastPose.eye : [-this.table.L2 - 0.5, 0, 1];
       const t = this.lastPose ? this.lastPose.target : [0, 0, 0];
       const [x, y] = this.clampWalk(e[0], e[1]);
-      this.walk = { x, y, yaw: Math.atan2(t[1] - e[1], t[0] - e[0]), route: null, focus: null };
+      this.walk = { x, y, yaw: Math.atan2(t[1] - e[1], t[0] - e[0]), route: null, focus: null, tilt: 0 };
       this.zShot = this.z;   // remember the zoom of the shot, to restore it when coming back
       this.z = 1;            // walking = standing up
     }
@@ -614,7 +614,7 @@ window.QB = window.QB || {};
     setYaw(yaw) {
       const w = this.walk; if (!w) return;
       yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
-      if (!w.focus) { const t = this.walkPose().target; w.focus = [t[0], t[1], t[2]]; }   // what you look at now
+      if (!w.focus) { const t = this.walkBasePose().target; w.focus = [t[0], t[1], t[2]]; }   // what you look at now
       const d = Math.max(0.4, Math.hypot(w.focus[0] - w.x, w.focus[1] - w.y));
       w.focus = [w.x + Math.cos(yaw) * d, w.y + Math.sin(yaw) * d, w.focus[2]];
       w.yaw = yaw;
@@ -625,6 +625,15 @@ window.QB = window.QB || {};
       const w = this.walk; if (!w) return;
       const T = this.table;
       w.focus = free ? [x, y, z] : [Math.max(-T.L2, Math.min(T.L2, x)), Math.max(-T.W2, Math.min(T.W2, y)), z];
+      w.tilt = 0;            // a new spot to look at: look right at it
+    }
+    // tilting (drag up / down in the 3D view while walking): an extra up/down angle on top of where you look.
+    // Turning with the cone and walking keep it; picking a new spot to look at resets it. The total view angle
+    // stays between 80° down and 32° up.
+    setTilt(t) {
+      const w = this.walk; if (!w) return;
+      const p0 = this._pitch0 || 0;
+      w.tilt = Math.max(-1.40 - p0, Math.min(0.55 - p0, t));
     }
     // What is under the pointer in the 3D view? A ray from the camera through the pixel; the first thing it hits
     // counts (a ball in front hides the one behind it). Returns {x, y, z, ball} or null (floor, sky, ...).
@@ -674,8 +683,35 @@ window.QB = window.QB || {};
       let da = Math.atan2(y - w.y, x - w.x) - w.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
       return Math.abs(da) < this.hfov() / 2 + 0.15;
     }
+    // arrow keys: walk forward / back and step sideways (relative to where you face); Shift = faster.
+    // With a locked spot you keep facing it, so stepping sideways circles around it.
+    setWalkKeys(f, s, run) { this.walkKeys = { f, s, run }; }
+    // dragging the 3D view: look around freely. The first drag unlocks the spot you were looking at; the view
+    // keeps exactly the direction and up/down angle it had.
+    unlockView() {
+      const w = this.walk; if (!w || !w.focus) return;
+      const P = this.walkPose(), dx = P.target[0] - P.eye[0], dy = P.target[1] - P.eye[1], dz = P.target[2] - P.eye[2];
+      const hd = Math.hypot(dx, dy) || 1e-6, pitch = Math.atan2(dz, hd);
+      w.focus = null; w.yaw = Math.atan2(dy, dx);
+      const B = this.walkBasePose();
+      this._pitch0 = Math.atan2(B.target[2] - B.eye[2], Math.hypot(B.target[0] - B.eye[0], B.target[1] - B.eye[1]));
+      w.tilt = pitch - this._pitch0;
+    }
+    setLook(yaw, tilt) {
+      const w = this.walk; if (!w) return;
+      w.yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+      this.setTilt(tilt);
+    }
     stepWalk(dt) {
-      const w = this.walk; if (!w || !w.route) return;
+      const w = this.walk; if (!w) return;
+      const K = this.walkKeys;
+      if (K && (K.f || K.s)) {
+        w.route = null;
+        const v = (K.run ? 2.4 : 1.2) * dt / Math.hypot(K.f, K.s), c = Math.cos(w.yaw), sn = Math.sin(w.yaw);
+        [w.x, w.y] = this.clampWalk(w.x + (K.f * c + K.s * sn) * v, w.y + (K.f * sn - K.s * c) * v);
+        return;
+      }
+      if (!w.route) return;
       let v = 2.0 * dt;                                     // walking speed (m/s)
       while (v > 0 && w.route.length) {
         const [tx, ty] = w.route[0], d = Math.hypot(tx - w.x, ty - w.y);
@@ -685,6 +721,15 @@ window.QB = window.QB || {};
       if (!w.route.length) w.route = null;
     }
     walkPose() {
+      const P = this.walkBasePose(), w = this.walk;
+      const dx = P.target[0] - P.eye[0], dy = P.target[1] - P.eye[1], dz = P.target[2] - P.eye[2];
+      const hd = Math.hypot(dx, dy) || 1e-6, dist = Math.hypot(hd, dz);
+      this._pitch0 = Math.atan2(dz, hd);
+      if (!w.tilt) return P;
+      const p = Math.max(-1.40, Math.min(0.55, this._pitch0 + w.tilt)), c = Math.cos(p) * dist / hd;
+      return { eye: P.eye, target: [P.eye[0] + dx * c, P.eye[1] + dy * c, P.eye[2] + Math.sin(p) * dist] };
+    }
+    walkBasePose() {
       // standing (z = 1): eye 0.87 m; zoomed in: leaning over the table (same lean with or without a fixed point)
       const w = this.walk, h = this.walkEyeH();
       let lean = (1 - this.z) * 0.6;

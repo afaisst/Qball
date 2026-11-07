@@ -2,221 +2,154 @@
 
 <h1 align="center">Qball</h1>
 
-<p align="center"><b>A realistic billiards (pool) simulator in the browser, for playing and practicing.</b><br>
-Real ball physics (sliding, rolling, spin, squirt, throw, cushions), 9- and 10-ball, drills, and a 3D cue's-eye view.</p>
+<p align="center"><b>A pool (billiards) simulator that knows the physics — for playing, practicing and learning.</b></p>
 
-![Qball: top view, 3D cue view and the control panel](assets/screenshot.png)
+<p align="center"><a href="https://afaisst.github.io/Qball/"><b>▶ Play Qball in your browser</b></a><br>
+<sub>No install, no account. Works with a mouse, on a tablet, and offline (see <a href="#play-offline">Play offline</a>).</sub></p>
 
-## Quick start
+![Qball: an 8-ball table after the break, aiming a 28° cut. Top view with the ghost ball and the cue-ball path, the 3D cue view below with the eclipse view, and the cue rack and spin controls on the right](assets/screenshot.png)
 
-No install, no build, no server. Plain HTML + JavaScript.
+## Why Qball?
+
+Most pool games animate the balls. **Qball simulates them.** Every ball carries a velocity *and* a spin, and everything you see follows from the physics of a real table:
+
+- **Spin from the cue tip.** Where the tip meets the cue ball, how hard, and how steep the cue is decide the ball's speed and all three components of its spin. That gives you follow, draw, stun and side spin (english) — and, with a raised cue, **swerve and massé**. Hit too far from the centre and you **miscue**.
+- **Sliding, then rolling.** A ball first slides over the cloth; friction turns the slide into roll (at 5/7 of the starting speed for a centre-ball hit). That is why a stop shot needs a sliding cue ball, and why a soft centre-ball hit follows.
+- **Squirt.** Side spin pushes the cue ball slightly off the line you aim (cue deflection), just as with a real shaft.
+- **Throw.** Friction between the balls bends the object ball's path a little: cut-induced throw (up to ~3.5° on a slow cut) and spin-induced throw, from a measured friction curve.
+- **Real cushions.** The rebound uses a research model of the cushion impact (Mathavan et al. 2010), with friction at the cushion and at the slate. Running and reverse english change the angle off the rail, and a hard hit "shortens" the angle.
+- **Real pockets.** The pocket jaws are modelled, so balls can rattle and hang. Pocketed balls drop in, roll around the pocket and stay there until you re-rack.
+- **Real breaks.** In a rack the balls touch, so all the contacts act at once. Qball solves them together with an elastic contact model, so the break spreads through the rack the way it does on a real table — and a frozen combination passes its speed on to the far ball.
+- **Rail clearance.** Near a cushion the cue has to clear the rail: you can't hit the cue ball as low, unless you raise the cue.
+
+The simulation has been **tested by a pool expert** against real shots — draw, follow, cuts, kicks and three-rail shots — and its settings were tuned until the table played like a real one.
+
+## Learn: lessons
+
+The **Lessons** tab teaches one idea at a time. The balls are set up for you, only the thing the lesson is about can be changed, and a lesson card on the table explains each step while the views move to show it.
+
+<table><tr>
+<td width="50%"><img src="assets/screenshots/lesson-ghost.jpg" alt="Lesson 1: the 2D view zoomed in on the ghost ball, with the line from the pocket through the 9-ball and the lesson card"></td>
+<td width="50%"><img src="assets/screenshots/lesson-eclipse.jpg" alt="Lesson 1: the 3D view along the cue line at a 30° cut; the red dot on the edge of the 9-ball marks where to aim, the inset shows the half-ball eclipse"></td>
+</tr><tr>
+<td><sub>Lesson 1: where the ghost ball is.</sub></td>
+<td><sub>Lesson 1: a 30° cut seen along the cue line. You aim at the edge of the 9 — a half-ball hit.</sub></td>
+</tr></table>
+
+- **Lesson 1 · Aiming with the ghost ball.** Where do you aim? At the *ghost ball*: the spot the cue ball has to take, touching the object ball on the line to the pocket. You see it from above, from behind the pocket and from the cue ball, in a straight shot and in 10°, 30° and 50° cuts. The aiming point moves from the centre of the object ball to its edge (30°, the half-ball hit) and into the air beside it (50°), and the **eclipse view** shows the easier way to aim: how much of the object ball the cue ball covers. Then you place the ghost ball yourself, aim and shoot, and Qball shows how far off you were.
+- **Lesson 2 · The stop shot.** Stop the cue ball dead where it hits the object ball. You try soft, medium and hard shots in the centre and a little below it, and see why a sliding cue ball stops and a rolling one follows.
+
+More lessons are on the way.
+
+## Practice: drills
+
+The **Drills** tab has practice routines you can also set up on a real table — each card shows the layout.
+
+<p align="center"><img src="assets/screenshots/drills.jpg" width="80%" alt="The Drills tab: cards with the layout of each drill"></p>
+
+- **Target drills** (inspired by the Billiard University exam): straight-in, cut shots, stop shot, follow, draw, stun to a target and the wagon wheel. You start at level 4; a make moves you up a level, a miss moves you down. After 10 shots you get a score out of 10.
+- **Pattern drills:** ball in hand, then run the balls without missing — the L-drill, a long line-up, a cross line, balls frozen to the rails, the diamond grid, Dr. Dave's 3-ball drill, random layouts and "play the ghost". Ten tries each.
+- **Free ball placement:** put any of the 15 balls anywhere and practise the shot that's been giving you trouble.
+
+## Play: 8-ball, 9-ball, 10-ball
+
+<p align="center"><img src="assets/screenshots/break.jpg" width="80%" alt="A 9-ball break with the break cue: the ball trails show the rack spreading over the whole table"></p>
+
+- **9-ball and 10-ball** with the main rules for solo practice: hit the lowest ball first, and after contact pocket a ball or send one to a rail. Fouls give ball in hand; pocketing the 9 (or the 10) wins the rack.
+- **8-ball:** the rack and the break (the full 8-ball rules are on the roadmap).
+- **Free practice:** the cue ball and one object ball, re-spotted after each pot.
+- **Break cue:** for the break, take the break cue from the cue rack (or press <kbd>B</kbd>). Its hard phenolic tip and an all-out stroke send the cue ball at up to ~13 m/s (about 30 mph), like a strong pro break. After the break you get your playing cue back.
+
+## How to play
+
+### Shooting (mouse)
+
+| Action | How |
+|---|---|
+| Aim | Move the mouse. **Click** to freeze the aim (so you can go to the panel), click again to release. <kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine). <kbd>Space</kbd> locks the aim. |
+| Shoot | Press on the table, drag back to pull the cue, let go. The farther you pull, the harder the shot. <kbd>Esc</kbd> cancels. |
+| Spin | Click or drag on the cue-ball picture, or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>. <kbd>C</kbd> centres it. Outside the dashed ring you miscue. |
+| Cue elevation | Drag the side-view picture, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower. |
+| Cue | Playing cue or break cue in the cue rack; <kbd>B</kbd> switches. |
+| Ball in hand | Drag the cue ball where you want it. |
+| View | **2D**, **Split** or **3D** in the top bar; <kbd>V</kbd> cycles. |
+| Help | **? Help** (or <kbd>?</kbd>) lists all the controls. |
+
+<table><tr>
+<td width="50%"><img src="assets/screenshots/spin.jpg" alt="Draw with a little left english: the cue-ball picture shows the tip low and left, and the cue-ball path curves back from the object ball"></td>
+<td width="50%"><img src="assets/screenshots/walk.jpg" alt="Walk mode: standing at a corner of the table in the billiard room, with the map in the lower left"></td>
+</tr><tr>
+<td><sub>Spin: tip low and a little left. The light-blue line shows where the cue ball goes after the hit.</sub></td>
+<td><sub>Walk mode: look at the layout from anywhere around the table.</sub></td>
+</tr></table>
+
+### The 3D view
+
+The 3D view is your eye down the cue, in a billiard room with a three-shade lamp and paintings on the walls.
+
+- **Aim:** drag left or right (<kbd>Shift</kbd> for fine steps). **Shoot:** pull the little cue on the right side down and let go.
+- **Zoom:** the mouse wheel takes you from down on the shot to standing up. Keep zooming out to start walking.
+- **After the shot** the camera pulls back so you can watch the whole table, then returns to your shot.
+- **Walk mode** (🚶 **Walk**, or click the map): stand up and walk around the table.
+  - Walk with the arrow keys (<kbd>Shift</kbd> to go faster), or drag the blue dot on the map.
+  - Drag the 3D view to look around: left/right turns, up/down tilts.
+  - Double-click a ball, a spot on the table or a painting to lock your view on it; you keep facing it as you walk. Dragging the view unlocks it.
+  - Press walk again, double-click the map or pick up the cue to go back to your shot, aiming the way you face.
+
+### Aiming aids and settings
+
+Open **⚙ Settings** to switch each aid on or off (the choice is remembered):
+
+- **Aim line and ghost ball**, the **object ball's path** to the pocket, the **cue ball's path** after the hit (shows draw, follow and stun), and the **tangent line**.
+- **Eclipse view:** a small inset looking straight along the cue line, showing how much of the object ball the cue ball covers (e.g. 50% for a half-ball hit).
+- A small **red cross** on the cue ball where the tip will hit (3D).
+- **Ball trails** of the last shot, practice markings, realistic shadows and the after-shot overview.
+
+### Touch screens
+
+On a tablet, drag on the table to aim — start on the cue ball for fine aiming — and shoot with the pull-down cue at the side. In the 3D view, drag to aim and pinch to zoom. With a mouse, the **👆 Touch mode** button turns on the same controls.
+
+### Table size
+
+Choose a **9 ft** tournament table (the default), an **8 ft** home table or a **7 ft** bar box in the top bar. Pockets and balls keep their regulation sizes.
+
+### Test mode
+
+For the curious (the small *test mode* link at the bottom right, or <kbd>T</kbd>): place balls exactly, shoot with exact numbers, change every physics setting, replay shots in slow motion, read a full report of each shot, and copy a shot to share it. How the physics works is described in [docs/physics.md](docs/physics.md).
+
+## Play offline
+
+Qball is a plain web page: no install, no server, no internet connection needed once you have the files.
 
 ```bash
 git clone https://github.com/afaisst/Qball.git
 cd Qball
-open index.html        # or double-click index.html (macOS); any modern browser works
+open index.html        # macOS; on Windows/Linux, double-click index.html
 ```
 
-Everything runs offline. The only library, [three.js](https://threejs.org) (r149, for the 3D view), is vendored in `js/vendor/`.
+No git? Click **Code → Download ZIP** on the GitHub page, unzip it, and open `index.html` in any modern browser (Chrome, Edge, Firefox or Safari).
 
-To host it, any static web host works. For example, turn on **GitHub Pages** (Settings → Pages → *Deploy from branch* → `main` / root) and the game is at `https://afaisst.github.io/Qball/`.
+## Version history
 
-## Features
-
-- **Physics, not animation:** every ball carries a velocity and a spin vector. Sliding and rolling friction, side-spin decay, cue-tip contact with miscues, squirt (cue deflection), swerve/massé with an elevated cue, ball–ball throw, and a research-based cushion model ([Mathavan et al. 2010](#references)). See [Physics model](#physics-model).
-- **Spin and elevation:** pick the tip contact point on a cue-ball diagram and raise the cue butt on a side view. Hitting outside the dashed ring is a miscue.
-- **Two cues:** a playing cue and a **break cue** (hard phenolic tip, swung all-out: the cue ball leaves at up to ~13 m/s instead of ~8). Pick one in the panel's cue rack or press <kbd>B</kbd>; after the break in a game the playing cue comes back.
-- **Rail clearance:** within 20 cm of a cushion, the cue has to pass over the rail. The part of the cue ball you can't reach is shaded red, and raising the cue shrinks it. When the cue lies over a pocket, there's no cushion under it, so the obstacle is the rail behind the hole: farther back, which frees up draw shots.
-- **Games:** 8-, 9- and 10-ball racks plus free practice. 9-ball and 10-ball use (simplified) foul rules with ball in hand.
-- **Lessons:** step-by-step introductions with explanations and camera moves (Lesson 1: aiming with the ghost ball, Lesson 2: the stop shot).
-- **Drills:** Billiard University–style target drills with level progression and scoring, and pattern drills (L-drill, line-ups, rail balls, diamond grid, Dr. Dave's 3-ball drill, random layouts, play the ghost).
-- **Free ball placement:** build any position from all 15 balls.
-- **Views:** 2D top view, a 3D cue's-eye view, or both (split). The 3D view has drag-to-aim, a pull-back cue to shoot, zoom from "down on the shot" to standing, and a **walk mode** to look at the layout from around the table. Balls have a satin finish with light wear (faint chalk marks and scuffs), the cloth has a felt texture with a faint nap and light wear along the break lane, the cushions have a real profile (rounded nose, face slanting back under it, curved jaws at the pockets), the rails are grained wood, and the table stands on six turned legs on a patterned rug in a wood-panelled room with paintings by Swiss artists in gilded frames and a door left slightly ajar, lit by a three-shade billiard lamp whose spotlights give each ball its soft shadows (all textures are generated in the browser, `js/textures.js`). Pocketed balls don't just vanish: they drop into the pocket, rattle off its wall (a slow ball circles the rim), bounce on the bottom and settle in the pocket (several balls stack up in the same pocket). They stay there until they are re-spotted or re-racked (a visual animation; the physics and rules count the ball as pocketed the moment its centre crosses the drop line). After a shot the 3D camera pulls back to an overview while the balls roll — high up on the shot line behind where the cue ball was, near the end of the cue, which stays where the shot was played — then returns to your aiming view (can be turned off in Settings).
-- **Settings** (⚙ in the top bar; remembered): realistic shadows from the three lamps (or one light from above), the post-shot overview, and **aiming aids** (each can be turned off): aim line, ghost ball, a red cross on the cue ball where the tip will hit (3D), an **eclipse view** (a small inset looking exactly along the cue line: the cue ball's outline over the object ball shows the ball fraction, e.g. 50% for a half-ball hit; move it by the ✥ grip in its corner), object-ball path, cue-ball path (after hitting a ball or a cushion), tangent line, ball trails, practice markings.
-- **Test mode** for physics experiments: exact inputs, sliders for every physics parameter, shot reports, replay, slow motion, and copy/paste of complete shots as JSON.
-
-## How to play
-
-### Table size
-
-Choose a **9 ft** (tournament, 100" × 50" playing surface; the default), **8 ft** (home table, 88" × 44") or **7 ft** (bar box, 78" × 39") table in the top bar. The choice is remembered; the page reloads and builds everything — table, pockets, markings, drills, lessons and the 3D room — at that size. Pockets and balls keep their regulation sizes.
-
-### Shooting (top view)
-
-| Action | How |
-|---|---|
-| Aim | Move the mouse. **Click** on the table to freeze the aim, so you can go to the panel without losing it; click again to release (a shot also releases it). <kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine). <kbd>Space</kbd> locks the aim. |
-| Shoot | Press anywhere on the table, drag back to pull the cue, release. <kbd>Esc</kbd> cancels. |
-| Spin | Click/drag on the cue-ball diagram, or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>. <kbd>C</kbd> or double-click centers it. |
-| Cue | The cue rack in the panel: playing cue or break cue. <kbd>B</kbd> switches. |
-| Cue elevation | Drag the side-view diagram, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower. Double-click for a level cue. |
-| Ball in hand | Drag the cue ball where you want it. |
-| View | 2D / Split / 3D in the top bar. <kbd>V</kbd> cycles; the choice is remembered. |
-| Test mode | The small *test mode* link at the bottom right, or <kbd>T</kbd>. |
-| Help | **? Help** in the top bar (or <kbd>?</kbd>) shows all the controls. |
-| Move panels | Drag the ✥ in the corner of the mini map, the eclipse view or a pop-up; double-click it to put it back. |
-
-### Touch screens (iPad, tablets)
-
-Touch is detected automatically. With a mouse, the **👆 Touch mode** button in the top bar turns on the same controls (the button is hidden on touch-only devices, where they're always on). There's no hover on a touch screen, so:
-
-- **Aim:** drag a finger anywhere on the table and the cue points toward it. For fine aiming, start the drag on the cue ball and move sideways; 1 cm of finger motion turns the cue by about 0.1°.
-- **Shoot:** in the 2D view a pull-down cue appears on the right (the same one the 3D view has). Drag it down and let go.
-- **3D view:** drag to aim, pinch to zoom. Double-tap the map to return to your shot.
-- **Spin and elevation:** tap or drag on the diagrams; use the *center* and *level* buttons to reset.
-- In portrait orientation the panel moves below the table. On a phone (or any tall, narrow view) the 2D table is drawn upright, with the head rail at the bottom, whenever that makes it bigger; the top bar wraps onto two lines.
-
-### 3D cue view
-
-- **Aim:** drag left/right (<kbd>Shift</kbd> for fine steps). The 3D view doesn't follow the mouse.
-- **Shoot:** drag the little cue on the right side down to pull back, then release.
-- **Zoom:** mouse wheel. Zooming in gets you down on the shot (eye just above the cue); zooming out stands you up. When you raise the cue, the view backs off automatically so the whole stick stays visible.
-- **Map:** in 3D-only view, a small top-view map appears for ball in hand and arranging balls; the big **🗺 Map** button in the right panel shows it any time. It sits in the lower left; drag it anywhere by the ✥ grip in its corner (double-click the grip to put it back).
-- **Walk mode:** press the big **🚶 Walk** button in the right panel, or keep zooming out after you're standing, to stand up where you are. Everything is steered from the map: drag the blue dot to move (or click where to go; you walk around the table, not through it) and drag the blue view cone to turn (the view turns at the same up/down angle), or double-click (double-tap) anything in the 3D view — a ball, a spot on the cloth, a painting or a spot on the wall — to look at it; a ball in front hides the ones behind it. Double-clicking in the 3D view from your shot stands you up into walk mode looking there. The spot you look at is shown as a ring on the map and stays fixed: as you walk you keep facing it. You can also drag the crosshair itself, e.g. onto a ball (it snaps to the ball), to keep looking at that ball while you walk around it. The wheel (or a pinch) on the 3D view bends you down toward the table. The cue walks with you: while walking you carry it (shown see-through, along your line of sight; on the map through the blue dot), and when you return to your shot (press walk again, double-click the map, or pick up the cue) you aim in that direction, with the zoom you had before.
-
-### Lessons
-
-Step-by-step introductions (the **Lessons** tab). Each lesson sets the balls up for you and limits what you can change, so it is about one thing at a time.
-
-- **Lesson 1 · Aiming with the ghost ball:** a lesson card on the table walks you through six set-ups with *Next* / *Back*. The 2D view zooms in on the ghost ball, the 3D camera moves behind the pocket line and along the cue line, a red dot marks the aiming point, and the eclipse inset shows how much of the object ball the cue ball covers.
-  1. *Straight shot*, then *10°*, *30°* and *50° cuts*: the ghost ball stays in the same place; the aiming point moves from the centre of the 9 to its edge (30°, half-ball) and into the air beside it (50°). After each explanation you take the shot (aim set, strength fixed: the 9 goes in).
-  2. *Your ghost ball* (twice, random cuts of 20–40°): with the aids off, you drag the ghost ball around the 9, confirm, aim at its centre in the 3D view and shoot. Afterwards the right spot is shown in green, with how far off your ghost ball and your aim were. A miss: place it again.
-  The panel lists the set-ups (click one to jump there); *Restart this set-up* starts the current one over.
-- **Lesson 2 · The stop shot:** short pop-ups explain each step, the panel shows a strength meter (soft / medium / hard) and the result of every shot, and the balls are set up again after each shot. *Show the instructions* brings the current step's text back. A straight shot into the side pocket with the aim fixed; you choose the strength and how low you hit the cue ball (on the vertical line through its centre, at or below it).
-  1. *Center ball*, soft / medium / hard: soft follows, medium and hard stop (a sliding cue ball stops, a rolling one follows).
-  2. *A little below center* (green marker): soft follows much less, medium stops dead, hard draws back.
-
-Lesson scripts are written as text in `lessons/` (e.g. `lessons/lesson1.txt`) and turned into lesson definitions in `js/lessons.js`. The comment at the top of that file describes both kinds: practice lessons (balls, limits, strength bands, steps) and scripted lessons (set-ups made of beats: view, 2D zoom, 3D camera, aids, marks, and the player's task).
-
-### Games
-
-- **9-ball / 10-ball (solo practice, simplified WPA rules):** hit the lowest-numbered ball first, and after contact pocket a ball or drive any ball to a rail. A scratch is a foul too. Any foul gives ball in hand anywhere, and a game ball pocketed on a foul is re-spotted. Legally pocketing the 9 (or 10) wins the rack. Not yet included: break requirements, call shots, the three-foul rule, push-out.
-- **8-ball:** the rack with ball in hand for the break (no 8-ball rules yet).
-- **Free practice:** the cue ball and the 1-ball.
-
-The panel shows the rack: balls still on the table are faded, pocketed ones are solid, and the next ball is ringed.
-
-### Drills
-
-- **Target drills** (inspired by the Billiard University Exam I: cut shots, stop, follow, draw, stun, wagon wheel): you start at level 4. A make moves you up a level and a miss moves you down. After 10 shots, the score is the final level plus makes at the top level. The target pocket pulses yellow, and cue-ball targets are cyan circles.
-- **Pattern drills:** take ball in hand, then run the balls. Every shot must pocket a ball, and a miss or scratch ends the try. You get 10 tries. Drills: L-drill, diamond grid, long line-up, cross line, balls on the rails, Dr. Dave's 3-ball drill, random layouts, play the ghost.
-- **Free Ball Placement:** drag any of the 15 balls onto the table. *Arrange* (<kbd>M</kbd>) moves balls; dragging a ball off the table or double-clicking it removes it. *↺ Last setup* restores the position before the last shot.
-
-Draw shots and raised-cue shots leave a small chalk mark on the cloth, like on a real table.
-
-### Test mode
-
-- Drag any ball (<kbd>Shift</kbd> or *Move balls*), or type exact positions in meters.
-- **Shoot precisely:** aim angle, cue speed (m/s), tip offset, elevation, or an exact cut angle (*Set cut*). <kbd>Enter</kbd> shoots, <kbd>R</kbd> replays the identical shot, <kbd>X</kbd> stops all balls.
-- **Physics sliders** for every parameter below, plus a choice of cushion model.
-- **Shot report** (cut angle, departure angles, speeds), live ball state (sliding/rolling, ω), trails, contact positions, full-physics path preview, and slow motion, and the 3D overview camera's set-back and height.
-- **Share a shot:** *Copy last shot* puts the full shot on the clipboard as JSON: positions, aim, speed, tip, elevation and all physics settings. *Load shot…* sets it up again, and `node test/replay_shot.js shot.json` replays it in the terminal.
-
-## Physics model
-
-`js/physics.js`. SI units, origin at the table center, +x toward the foot rail, +y toward the top rail.
-
-| Quantity | Default |
-|---|---|
-| Table | 9 ft, 2.54 × 1.27 m playing surface |
-| Pockets | corner mouth 4.5″, side 5″, jaw angles 142° / 104° |
-| Ball | R = 28.575 mm, m = 0.17 kg |
-| Sliding friction μs | 0.11 |
-| Rolling resistance μr | 0.0155 |
-| Side-spin decay | 20 rad/s² |
-| Ball–ball restitution | 0.975 |
-| Ball–ball friction | μ = 0.00995 + 0.108·e^(−1.088·slip) (measured curve) |
-| Cushion model | Mathavan 2010 (alternatives: Han 2005, simple) |
-| Cushion restitution / friction | e = 0.85 (−0.018 per m/s), μc = 0.25, nose at 63.5% of ball height |
-| Playing cue | 0.54 kg (19 oz), tip efficiency 0.80, end mass 3 g (squirt), tip friction 0.66, max speed 6 m/s (cue ball ≈ 8 m/s), elevation 0–80° |
-| Break cue | 0.567 kg (20 oz), phenolic tip: efficiency 0.90, tip friction 0.55 (miscues sooner), end mass 8 g, max speed 9 m/s (cue ball ≈ 13 m/s) |
-| Ball contact (groups) | Hertz, E = 5 GPa, ν = 0.35 (contact ≈ 0.25 ms) |
-| Timestep | 0.2 ms, with exact rewind to each collision |
-
-The defaults were tuned by feel against real shots (e.g. 3-rail and kick shots) and can all be changed in test mode.
-
-**Ball motion.** Each ball has linear velocity **v** and angular velocity **ω**. The slip of the contact point on the cloth decides the phase:
-
-- **Sliding:** friction μs·g opposes the slip. A center-ball hit turns into rolling at 5/7 of its initial speed.
-- **Rolling:** rolling resistance μr·g, with spin locked to the velocity.
-- **Side spin** decays at a constant rate.
-
-Each phase has constant acceleration, so it is integrated analytically, and phase changes happen at the exact time.
-
-**Cue strike.** The pull-back sets the cue speed V. The tip hits the ball at the chosen offset (a, b) on a cue tilted by elevation θ. The impulse magnitude is
-
-`F = (1+e)·V·(ê·k) / ((ê·k)²/M + 1/m + |OP×k|²/I)`
-
-which reduces to Alciatore's TP A.30 for a level cue. This gives speed and all three spin components, so an elevated cue with english produces **swerve and massé**. If the contact angle exceeds the tip friction limit, the shot is a **miscue**: the tip slides, and you get a weak, off-line, nearly spinless hit. **Squirt** comes from the shaft's effective end mass (TP A.31).
-
-**Ball–ball collisions.** A normal impulse with restitution, plus friction at the contact. Friction uses the measured μ(slip) curve and the spins of both balls. This produces cut-induced throw (≈3.5° for a slow 30° stun cut, <1° when fast) and spin-induced throw, and transfers a little spin to the object ball.
-
-**Groups of touching balls (the break, frozen balls).** One-pair-at-a-time impulses fail in a rack: the order of the pairs decides where the energy goes, and on the break the head ball handed almost everything to one neighbour, so a single ball shot out of a back corner at nearly the cue ball's speed while the rest barely moved. Real balls are a little elastic; a contact lasts about 0.25 ms, much longer than a push needs to cross the tiny gaps in a rack, so all the contacts act together. When a collision involves a ball that touches (within 1.5 mm) other balls, the whole group is integrated with Hertz contact forces (F ∝ δ^1.5) in 2 µs steps until every contact lets go, with the same restitution and ball–ball friction as the impulse model (the two agree within 0.3° of throw for a single pair). On the break the energy now spreads through the rack: the back corner balls and the wing balls leave fastest, the head ball slowly, and the cue ball stops or bounces back a little. A frozen combination passes nearly all the speed to the far ball.
-
-**Cushions** (selectable):
-
-- **Mathavan 2010** (default): the impact is integrated through compression and restitution. Friction acts both at the cushion nose and at the slate, where the cushion presses the ball into the cloth. Topspin, slide and running/reverse english all shape the rebound.
-- **Han 2005:** a single impulse at the cushion nose with restitution and friction.
-- **Simple:** reflect the normal velocity and keep rolling. Not physical; kept for comparison.
-
-**Pockets:** the jaws are real line segments (balls can rattle). A ball drops when its center enters the pocket's drop circle.
-
-## Tests
-
-```bash
-node test/physics_test.js      # rolling speed 5/7, slide/roll distances, 30°/90° rules, cushion, pockets,
-                               # stop/draw/follow, english off the rail, squirt, throw, massé, miscues
-node test/compare_cushions.js  # compares the cushion models
-node test/replay_shot.js shot.json [param=value …]   # replays a copied shot, listing every contact
-node test/break_test.js 8ball '{}' 6,9 20             # break statistics over 20 racks at cue speeds 6 and 9 m/s
-```
-
-The tests need [Node.js](https://nodejs.org) and print measured values next to the theoretical ones.
-
-## Project structure
-
-```
-index.html          page layout
-css/style.css       styles
-js/constants.js     table, ball, cue dimensions and physics defaults
-js/table.js         table geometry: cushions, pocket jaws, diamonds, spots
-js/physics.js       ball motion, collisions, cushion models, cue impact
-js/render.js        2D top view (canvas)
-js/view3d.js        3D cue view and walk mode (three.js)
-js/textures.js      procedural cloth, felt, wood, rug, floor and wallpaper textures
-js/art.js           the paintings (generated by tools/embed-art.js from assets/art/)
-tools/embed-art.js  packs assets/art/*.jpg into js/art.js
-js/setups.js        game racks and drill definitions
-js/lessons.js       lessons: setups, limits, steps, camera moves and texts
-lessons/            lesson scripts (plain text) the lessons are written from
-js/audio.js         sounds, synthesized in the browser (Web Audio): ball clacks, cue tip, cushion thuds, pocket drops, cloth rumble, room reverb
-js/main.js          input, game and drill logic, UI
-js/vendor/          three.js r149 (MIT license)
-test/               command-line physics tests (Node.js)
-assets/             icon and screenshot
-```
+- **1.6 · 6 Nov 2026** — **Full walk mode:** walk with the arrow keys, look around (and up and down) by dragging the 3D view; clicking the map just stands you up where you are. New README and screenshots.
+- **1.5 · 6 Nov 2026** — **Realistic breaks:** touching balls now collide all at once, with an elastic contact model, so the break spreads through the rack instead of sending one ball out of the back. **Break cue** and a cue rack.
+- **1.4 · 2 Nov 2026** — **Lesson 1, aiming with the ghost ball:** the first scripted lesson, with a lesson card, 2D zoom and 3D camera moves; you place the ghost ball yourself at the end.
+- **1.3 · 29 Oct 2026** — **The billiard room:** 7, 8 and 9 ft tables; real cushion profile and rounded rails; a three-shade lamp with soft ball shadows; paintings by Swiss artists and a door; Settings and Help pop-ups; new, more natural sounds; movable panels.
+- **1.2 · 29 Oct 2026** — **Tablets and a better 3D view:** touch controls and a phone/portrait layout; a reworked walk mode (drag the dot, turn with the view cone, keep looking at a spot); the eclipse view and the tip mark; cloth, wood and ball textures; the overview camera after the shot; balls that drop into the pockets and stay there; the Lessons tab with the stop shot; table legs, rug and walls.
+- **1.0 · 28 Oct 2026** — **First version:** the physics engine (sliding and rolling, spin, squirt, swerve and massé, throw, miscues, research-based cushions, rail clearance), 2D top view and 3D cue view (with walking around the table), 8-, 9- and 10-ball, target and pattern drills, free ball placement, and test mode.
 
 ## Roadmap
 
 - 8-ball rules and a two-player mode (turns, fouls, groups, called shots)
-- Break rules for 9/10-ball, push-out, three-foul rule
-- Jump shots (vertical ball motion) and the table-friction impulse during elevated hits
-- More drills
-
-## References
-
-- D. G. Alciatore, *The Illustrated Principles of Pool and Billiards* and his technical proofs at [drdavepoolinfo.com](https://drdavepoolinfo.com) (cue–ball impact TP A.30, squirt TP A.31, throw).
-- S. Mathavan, M. R. Jackson, R. M. Parkin, "A theoretical analysis of billiard ball dynamics under cushion impacts," *Proc. IMechE Part C* 224 (2010).
-- H. Han, "Dynamics in carom and three cushion billiards," *J. Mech. Sci. Technol.* 19 (2005).
-- Drills inspired by the [Billiard University](https://billiarduniversity.org/) exams and [Dr. Dave's drill pages](https://drdavepoolinfo.com/). Ball positions are approximations, not the official diagrams.
+- Break rules for 9- and 10-ball, push-out, the three-foul rule
+- More lessons and drills
+- Jump shots
 
 ## Art in the 3D room
 
-The paintings are packed into `js/art.js` by `node tools/embed-art.js` from `assets/art/` (images + `paintings.json`).
-
 - **Public domain** (via Wikimedia Commons): Ferdinand Hodler, *Lake Thun with Symmetrical Reflection* (1905), *The Niesen* (1910) and *Lake Geneva from Chexbres* (1905); Albert Anker, *The Village School of 1848* (1896); Arnold Böcklin, *Isle of the Dead* (first version, 1880); Félix Vallotton, *Sunset at Grasse* (1918); Giovanni Giacometti, *Maloja in Winter*; Paul Klee, *Senecio* (1922).
-- **Rainer Oberhänsli**, two *Horizont* paintings — © the artist, used with his permission ([raineroberhaensli.ch](http://www.raineroberhaensli.ch/galerie.htm)). These are not covered by this project's licence and may not be reused without the artist's permission.
+- **Rainer Oberhänsli**, two *Horizont* paintings — © the artist, used with his permission ([raineroberhaensli.ch](http://www.raineroberhaensli.ch/galerie.htm)). They may not be reused without the artist's permission.
 
 ## Credits
 
-Created by Andreas Faisst. The 3D view uses [three.js](https://threejs.org) (MIT license, see `js/vendor/three.LICENSE.txt`).
+Created by Andreas Faisst. Physics after D. G. Alciatore (Dr. Dave), S. Mathavan et al. and H. Han — see [docs/physics.md](docs/physics.md). Drills inspired by the [Billiard University](https://billiarduniversity.org/) exams and [Dr. Dave's drill pages](https://drdavepoolinfo.com/) (ball positions are approximations, not the official diagrams). The 3D view uses [three.js](https://threejs.org) (MIT license, see `js/vendor/three.LICENSE.txt`).

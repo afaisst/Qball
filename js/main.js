@@ -341,7 +341,7 @@
   function startWalking() {
     if (!view3d || S.view !== '3d' || view3d.walk || scriptOn()) return;
     view3d.startWalk();
-    setStatus('Walking: drag the blue dot on the map to move (or click where to go) · drag the blue view cone to look at a spot (you keep facing it as you walk) · wheel / pinch on the 3D view to bend down · 🚶 again, double-click the map or pick up the cue: back to your shot.');
+    setStatus('Walking: arrow keys to walk (or drag the blue dot on the map) · drag the 3D view to look around · double-click a spot or drag the cone / ⌖ on the map to lock the view on it · wheel / pinch: bend down · 🚶 again, double-click the map or pick up the cue: back to your shot.');
   }
   function toggleWalk() { if (view3d && view3d.walk) returnToShot(); else startWalking(); }
   function canDrag(b, shift) {
@@ -363,7 +363,8 @@
     if (isMap() && !(b && canDrag(b, ev.shiftKey))) {
       // 3D-only view: the small map never aims or shoots; it places balls in hand and steers walking
       if (view3d) {
-        startWalking();
+        // a click on the map while aiming only stands you up where you are (walk mode); clicks after that steer
+        if (!view3d.walk) { startWalking(); return; }
         if (view3d.walk) {
           // drag the blue dot to move, drag the view cone to turn, click anywhere else to walk there
           const w = view3d.walk;
@@ -478,6 +479,7 @@
     if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') { if (ev.key === 'Enter') ev.target.blur(); return; }
     const k = ev.key;
     if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') {
+      if (view3d && view3d.walk) { S.walkKeys[k] = true; walkKeysChanged(ev.shiftKey); ev.preventDefault(); return; }   // walking
       if (S.phase !== 'aim') return;
       const step = (ev.shiftKey ? 1 : ev.altKey ? 0.01 : 0.1) / DEG;
       S.aim = normAng(S.aim + ((k === 'ArrowLeft' || k === 'ArrowUp') ? step : -step));
@@ -498,7 +500,17 @@
     else if (k === 'b' || k === 'B') selectCue(S.cueId === 'break' ? 'play' : 'break');
     else if ('qeQE'.includes(k) && k.length === 1) setElev(S.elev + (k.toLowerCase() === 'e' ? 1 : -1) * (ev.shiftKey ? 5 : 1));
   });
-  window.addEventListener('keyup', (ev) => { if (ev.key === 'Shift') S.shiftDown = false; });
+  window.addEventListener('keyup', (ev) => {
+    if (ev.key === 'Shift') S.shiftDown = false;
+    if (ev.key in S.walkKeys) { delete S.walkKeys[ev.key]; walkKeysChanged(ev.shiftKey); }
+  });
+  // walking with the arrow keys: ↑ / ↓ forward and back, ← / → step sideways
+  S.walkKeys = {};
+  function walkKeysChanged(run) {
+    const K = S.walkKeys, f = (K.ArrowUp ? 1 : 0) - (K.ArrowDown ? 1 : 0), s = (K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0);
+    if (view3d) view3d.setWalkKeys(f, s, !!run);
+  }
+  window.addEventListener('blur', () => { S.walkKeys = {}; walkKeysChanged(false); });
 
   // ---------------- Test-mode actions ----------------
   function shootFromPanel() {
@@ -2022,10 +2034,10 @@
       $('pane2d').style.aspectRatio = `${aw.toFixed(3)} / ${ah.toFixed(3)}`;
       $('mapHint').textContent = walking
         ? 'drag the dot to walk · drag the cone or the ⌖, or double-click in the 3D view, to choose what to look at · double-click the map: back to your shot'
-        : 'click the map to walk · double-click: back to your shot';
+        : 'click the map to stand up and walk · double-click: back to your shot';
       const vh = document.querySelector('#pane3d .vhint');
       if (vh) { if (!vh.dataset.shot) vh.dataset.shot = vh.textContent;
-        vh.textContent = walking ? 'walking · double-click a ball or spot here to look at it · move with the dot on the map, turn with the cone · wheel / pinch: bend down · 🚶 again: back to your shot' : vh.dataset.shot; }
+        vh.textContent = walking ? 'walking · arrow keys: walk (Shift: faster) · drag here to look around · double-click a ball or spot to lock the view on it · wheel / pinch: bend down · 🚶 again: back to your shot' : vh.dataset.shot; }
       changed = true;
     }
     if (changed) { onResize(); placeMap(); }
@@ -2047,7 +2059,12 @@
       }
       if (touches3.size > 2) return;
     }
-    if (ev.button !== 0 || !cue.onTable || S.phase !== 'aim' || (view3d && view3d.walk)) return;   // walking: no dragging here
+    if (ev.button === 0 && view3d && view3d.walk) {         // walking: drag to look around (left/right: turn, up/down: tilt)
+      drag3 = { id: ev.pointerId, look: true, x: ev.clientX, y: ev.clientY, started: false };
+      cv3.setPointerCapture(ev.pointerId); cv3.classList.add('dragging');
+      return;
+    }
+    if (ev.button !== 0 || !cue.onTable || S.phase !== 'aim' || (view3d && view3d.walk)) return;
     QB.Sound.init();
     drag3 = { id: ev.pointerId, x: ev.clientX, lx: ev.clientX, ly: ev.clientY, aim: S.aim };
     cv3.setPointerCapture(ev.pointerId);
@@ -2059,6 +2076,21 @@
       const zRaw = pinch.z - (pinchDist() - pinch.d) * 0.004;
       view3d.z = Math.min(1, Math.max(0, zRaw));
       if (zRaw > 1.3 && !view3d.walk) startWalking();       // pinched out past standing: start walking
+      return;
+    }
+    if (drag3 && drag3.look && drag3.id === ev.pointerId) {
+      // grab the scene: it follows the pointer (drag right = turn left, drag down = look up); one screen width /
+      // height = the field of view. The first real movement unlocks the spot you were looking at.
+      if (!view3d.walk) { drag3 = null; return; }
+      if (!drag3.started) {
+        if (Math.hypot(ev.clientX - drag3.x, ev.clientY - drag3.y) < 4) return;
+        const wasLocked = !!view3d.walk.focus;
+        view3d.unlockView();
+        Object.assign(drag3, { started: true, x: ev.clientX, y: ev.clientY, yaw0: view3d.walk.yaw, t0: view3d.walk.tilt || 0 });
+        if (wasLocked) setStatus('Looking around freely — double-click a ball or spot to lock the view on it again.');
+      }
+      const kx = view3d.hfov() / Math.max(1, cv3.clientWidth), ky = view3d.camera.fov / DEG / Math.max(1, cv3.clientHeight);
+      view3d.setLook(drag3.yaw0 + (ev.clientX - drag3.x) * kx, drag3.t0 + (ev.clientY - drag3.y) * ky);
       return;
     }
     if (!drag3 || drag3.id !== ev.pointerId || S.phase !== 'aim' || view3d.walk) return;
