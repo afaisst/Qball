@@ -51,7 +51,11 @@
     selBall: null,         // object ball shown in the test-mode setup inputs
     chalk: [],             // blue chalk marks left on the cloth by draw / elevated shots
     act: { kind: 'game', id: 'free', shots: 0, pocketed: [] },   // current game / drill
+    cueId: 'play',         // the cue in the player's hands (QB.CUES: 'play' | 'break')
   };
+  // each cue keeps its own cue-related physics parameters (the playing cue starts from the defaults)
+  S.cueSets = {};
+  for (const id in QB.CUES) S.cueSets[id] = Object.fromEntries(QB.CUE_PARAMS.map(k => [k, QB.CUES[id][k]]));
 
   let cue = null, ob = null;
   // Replace all balls on the table (list of {num, x, y}); the cue ball is num 0.
@@ -70,8 +74,10 @@
 
   // ---------------- Helpers ----------------
   // Pull-back sets the cue (stick) speed; the cue-ball speed then also depends on the tip offset.
-  const speedFromPull = (p) => C.MAX_CUE_SPEED * Math.min(1, p / C.MAX_PULL);
-  const pullFromSpeed = (v) => C.MAX_PULL * Math.min(1, v / C.MAX_CUE_SPEED);
+  // (a full pull swings the selected cue at its top speed: 6 m/s for the playing cue, 9 m/s for the break cue)
+  const maxSpeed = () => (QB.CUES[S.cueId] || QB.CUES.play).maxSpeed;
+  const speedFromPull = (p) => maxSpeed() * Math.min(1, p / C.MAX_PULL);
+  const pullFromSpeed = (v) => C.MAX_PULL * Math.min(1, v / maxSpeed());
   // ---------------- Cue over the rail ----------------
   // Within RAIL_RANGE of the cushion behind the cue ball the cue has to pass over the cushion. With a level cue
   // that means hitting high on the ball; raising the cue frees up lower contact points. If the chosen contact
@@ -166,7 +172,8 @@
     const el = $('status'); el.textContent = msg; el.classList.toggle('flash', !!flash);
   }
   function defaultStatus() {
-    if (S.ballInHand) return setStatus(`Ball in hand (${S.ballInHand === 'kitchen' ? 'behind the head string' : 'anywhere'}) — drag the cue ball, then aim & shoot`);
+    if (S.ballInHand) return setStatus(`Ball in hand (${S.ballInHand === 'kitchen' ? 'behind the head string' : 'anywhere'}) — drag the cue ball, then aim & shoot`
+      + (isBreak() && S.cueId !== 'break' ? ' · press B for the break cue' : ''));
     if (S.act.kind === 'drill' && S.mode !== 'test') return setStatus(drillById(S.act.id).goal);
     if (S.act.kind === 'lesson') return setStatus(lessonStatus());
     if (placeMode() && S.arrange) return setStatus('Arrange: drag balls from the panel onto the table (drag a ball off the table or double-click it to remove). Then click the Arranging button (or press M) to shoot.');
@@ -228,7 +235,7 @@
   function doStrike() {
     S.setup = snapshot();
     const T = computeEffTip();
-    S.lastShot = { angle: S.aim, speed: S.strikeSpeed, tipX: T.x, tipY: T.y, elev: S.elev, params: Object.assign({}, world.params) };
+    S.lastShot = { angle: S.aim, speed: S.strikeSpeed, tipX: T.x, tipY: T.y, elev: S.elev, cue: S.cueId, params: Object.assign({}, world.params) };
     if (S.mode === 'play') S.refCueSpeed = S.strikeSpeed;
     world.events = []; world.clearTrails(); S.contacts = [];
     if (view3d) view3d.freeze(view3d.poseFor(cue, S.aim, S.elev / DEG));   // keep watching from where the shot was taken
@@ -488,6 +495,7 @@
       const st = ev.shiftKey ? 0.01 : 0.05, kk = k.toLowerCase();
       setTip(S.tipX + (kk === 'd' ? st : kk === 'a' ? -st : 0), S.tipY + (kk === 'w' ? st : kk === 's' ? -st : 0));
     } else if (k === 'c' || k === 'C') setTip(0, 0);
+    else if (k === 'b' || k === 'B') selectCue(S.cueId === 'break' ? 'play' : 'break');
     else if ('qeQE'.includes(k) && k.length === 1) setElev(S.elev + (k.toLowerCase() === 'e' ? 1 : -1) * (ev.shiftKey ? 5 : 1));
   });
   window.addEventListener('keyup', (ev) => { if (ev.key === 'Shift') S.shiftDown = false; });
@@ -518,6 +526,50 @@
     // if the helper lines include squirt, compensate so the real launch direction gives this cut
     S.aim = normAng(Math.atan2(ob.y - cue.y, ob.x - cue.x) - Math.asin(s) - (squirtLine() ? launchAngle() - S.aim : 0));
     S.aimLocked = true;
+  }
+
+  // ---------------- Cue rack: playing cue / break cue ----------------
+  const rackGame = () => S.act.kind === 'game' && ['8ball', '9ball', '10ball'].includes(S.act.id);
+  const isBreak = () => rackGame() && S.act.shots === 0;
+  function selectCue(id, quiet) {
+    if (!QB.CUES[id] || id === S.cueId) return;
+    if (id !== 'play' && S.act.kind === 'lesson') { setStatus('Lessons are played with the playing cue.', true); return; }
+    if (S.phase === 'pull' || S.phase === 'strike') return;
+    S.cueSets[S.cueId] = Object.fromEntries(QB.CUE_PARAMS.map(k => [k, world.params[k]]));   // keep this cue's settings
+    S.cueId = id; Object.assign(world.params, S.cueSets[id]);
+    renderer.cueLook = QB.CUES[id].look;
+    if (view3d) view3d.setCueLook(id);
+    if (typeof buildParams === 'function' && $('params').children.length) buildParams();
+    S.cbKey = ''; S.predKey = '';
+    drawTipPad(); drawCueRack();
+    if (!quiet) setStatus(id === 'break'
+      ? 'Break cue: hard phenolic tip, swung all-out — up to ~13 m/s cue-ball speed. Spin is limited (it miscues sooner). B: back to the playing cue.'
+      : 'Playing cue: leather tip for spin and control. B: break cue.', true);
+  }
+  // the rack in the panel: a small picture of each cue; the one in your hands is highlighted
+  function drawCueRack() {
+    const box = $('cueRack'); if (!box) return;
+    if (!box.children.length) {
+      for (const cd of Object.values(QB.CUES)) {
+        const b = document.createElement('button'); b.className = 'cuebtn'; b.dataset.id = cd.id;
+        b.title = cd.id === 'break' ? 'Break cue (B): for the break — more speed, hard tip, less spin' : 'Playing cue (B): for every other shot';
+        b.innerHTML = `<canvas></canvas><span class="cn">${cd.name}</span><span class="cnote">${cd.note}</span>`;
+        b.onclick = () => selectCue(cd.id);
+        box.appendChild(b);
+      }
+    }
+    for (const b of box.children) {
+      b.classList.toggle('on', b.dataset.id === S.cueId);
+      b.disabled = S.act.kind === 'lesson' && b.dataset.id !== 'play';
+      const cv = b.querySelector('canvas'), dpr = window.devicePixelRatio || 1, W = Math.round((cv.clientWidth || 120) * dpr), H = Math.round((cv.clientHeight || 14) * dpr);
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      const g = cv.getContext('2d'); g.clearRect(0, 0, W, H);
+      const L = C.CUE_LEN, x = (d) => W * 0.03 + (W * 0.94) * (1 - d / L), hh = (d) => H * (0.16 + 0.26 * d / L);
+      for (const [d0, d1, col] of QB.CUES[b.dataset.id].look) {
+        g.fillStyle = col; g.beginPath();
+        g.moveTo(x(d0), H / 2 - hh(d0)); g.lineTo(x(d1), H / 2 - hh(d1)); g.lineTo(x(d1), H / 2 + hh(d1)); g.lineTo(x(d0), H / 2 + hh(d0)); g.closePath(); g.fill();
+      }
+    }
   }
 
   // ---------------- Cue tip (spin) selector ----------------
@@ -770,6 +822,9 @@
   function afterGameShot(rep, msgs) {
     const a = S.act;
     a.shots++;
+    if (a.shots === 1 && rackGame() && S.lastShot && S.lastShot.cue === 'break' && S.cueId === 'break') {
+      selectCue('play', true); msgs.push('Break cue put away — playing cue in hand');
+    }
     if (rep) for (const p of rep.pockets) if (p.ball !== 0) a.pocketed.push(p.ball);
     if (a.id === 'place') return;                // free ball placement: pocketed balls simply return to the panel
     if (a.id === 'free') {                       // free practice: re-spot the object ball
@@ -853,6 +908,7 @@
   }
 
   function updateActivityUI() {
+    drawCueRack();
     $('lessonHud').hidden = S.act.kind !== 'lesson';
     if (S.act.kind === 'lesson') return updateLessonUI();
     const a = S.act, isDrill = a.kind === 'drill';
@@ -905,6 +961,7 @@
   const lessonStepObj = () => { const a = S.act, L = lessonById(a.id); return L.steps[a.step] || null; };
   function startLesson(id) {
     leaveScript();
+    selectCue('play', true);                   // lessons are played with the playing cue
     const L = lessonById(id);
     if (L.script) { startScript(L); updateActivityUI(); renderReport(); syncInputs(true); return; }
     S.act = { kind: 'lesson', id, step: 0, results: L.steps.map(() => ({})), done: false, last: null };
@@ -1439,7 +1496,7 @@
       sh = { angle: S.aim, speed: parseFloat($('inSpeed').value) || 2, tipX: S.tipX, tipY: S.tipY, elev: S.elev, params: world.params };
     }
     return JSON.stringify({ qball: 1, balls, aimDeg: Math.round(sh.angle * DEG * 1e4) / 1e4, cueSpeed: sh.speed,
-      tipX: sh.tipX, tipY: sh.tipY, elevDeg: sh.elev || 0, params: sh.params || world.params });
+      tipX: sh.tipX, tipY: sh.tipY, elevDeg: sh.elev || 0, cue: sh.cue || S.cueId, params: sh.params || world.params });
   }
   function copyShot() {
     const txt = shotJSON(), ta = $('shotText');
@@ -1455,6 +1512,7 @@
     try { o = JSON.parse($('shotText').value); } catch (e) { setStatus('Could not read the shot text (not valid JSON).', true); return; }
     if (!o || !Array.isArray(o.balls)) { setStatus('That is not a Qball shot.', true); return; }
     if (S.phase !== 'aim') stopAll();
+    if (o.cue && QB.CUES[o.cue] && o.cue !== S.cueId) selectCue(o.cue, true);
     if (o.params) { Object.assign(world.params, o.params); buildParams(); }
     const same = o.balls.length === world.balls.length && o.balls.every(sb => world.balls.some(q => q.num === sb.num));
     if (!same) { setBalls(o.balls); S.act = { kind: 'game', id: 'free', shots: 0, pocketed: [] }; updateActivityUI(); }
@@ -1560,6 +1618,8 @@
     { key: 'eCushion', label: 'Cushion restitution', min: 0.4, max: 1.0, step: 0.005, fmt: 3, note: 'normal-impulse restitution at the cushion nose' },
     { key: 'eCushionSlope', label: 'Cushion e drop per m/s', min: 0, max: 0.1, step: 0.002, fmt: 3, note: 'e = e₀ − k·v_normal: hard hits sink in and come off deader ("speed shortens the angle"); 0 = speed-independent' },
     { key: 'muCushion', label: 'Cushion friction μc', min: 0, max: 0.5, step: 0.01, fmt: 2, note: 'ball–rubber friction (Mathavan / Han models; typ. ≈ 0.2)' },
+    { key: 'cueMass', label: 'Cue mass (selected cue), kg', min: 0.45, max: 0.75, step: 0.005, fmt: 3, note: 'playing cue 0.54 (19 oz), break cue 0.567 (20 oz); heavier = a little more cue-ball speed' },
+    { key: 'tipE', label: 'Tip efficiency (selected cue)', min: 0.5, max: 1.0, step: 0.01, fmt: 2, note: 'tip–ball restitution: leather ≈ 0.80, hard phenolic break tip ≈ 0.90' },
     { key: 'cueEndMass', label: 'Cue end mass (squirt), kg', min: 0, max: 0.03, step: 0.001, fmt: 3, note: 'side spin deflects the cue ball off the aim line; 0 = no squirt, low-deflection shaft ≈ 0.005' },
     { key: 'tipFriction', label: 'Tip friction (chalk)', min: 0.3, max: 1.0, step: 0.01, fmt: 2, note: 'miscue when the tip offset exceeds μ/√(1+μ²) (dashed ring); 0.66 → 0.55R' },
     { key: 'ballFriction', label: 'Ball–ball friction (throw) ×', min: 0, max: 3, step: 0.05, fmt: 2, note: '× measured curve μ ≈ 0.01–0.11 vs slip speed; 0 = no throw' },
@@ -1585,7 +1645,12 @@
       inp.oninput = () => { world.params[p.key] = parseFloat(inp.value); lab.querySelector('b').textContent = (+inp.value).toFixed(p.fmt); drawTipPad(); };
     }
   }
-  $('btnDefaults').onclick = () => { world.params = Object.assign(world.params, QB.defaultParams()); buildParams(); };
+  $('btnDefaults').onclick = () => {
+    world.params = Object.assign(world.params, QB.defaultParams());
+    for (const id in QB.CUES) S.cueSets[id] = Object.fromEntries(QB.CUE_PARAMS.map(k => [k, QB.CUES[id][k]]));
+    Object.assign(world.params, S.cueSets[S.cueId]);           // (keeps the cue in your hands)
+    buildParams(); drawTipPad();
+  };
   buildParams();
 
   function syncInputs(force) {
@@ -1871,7 +1936,7 @@
     }
     // panel readouts
     const v = S.phase === 'pull' ? speedFromPull(S.pull) : S.phase === 'strike' ? S.strikeSpeed : 0;
-    $('powerFill').style.width = (100 * Math.min(1, v / C.MAX_CUE_SPEED)) + '%';
+    $('powerFill').style.width = (100 * Math.min(1, v / maxSpeed())) + '%';
     $('powerVal').textContent = v.toFixed(2) + ' m/s';
     const imp = impactNow(v);
     $('ballSpeedVal').textContent = imp.speed.toFixed(2) + ' m/s';
@@ -2086,7 +2151,7 @@
     const w0 = W * 0.045, w1 = W * 0.11;
     const seg = (a, b, col) => { const ya = tipY + a * len, yb = tipY + b * len, wa = w0 + (w1 - w0) * a, wb = w0 + (w1 - w0) * b;
       ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(cx - wa, ya); ctx.lineTo(cx + wa, ya); ctx.lineTo(cx + wb, yb); ctx.lineTo(cx - wb, yb); ctx.closePath(); ctx.fill(); };
-    seg(0, 0.01, '#3b6fd8'); seg(0.01, 0.04, '#f2efe6'); seg(0.04, 0.55, '#e3c48f'); seg(0.55, 0.7, '#2a1408'); seg(0.7, 0.88, '#151515'); seg(0.88, 1, '#2a1408');
+    for (const [d0, d1, col] of QB.CUES[S.cueId].look) seg(Math.min(1, d0 / 0.8 * 0.55), Math.min(1, d1 / 0.8 * 0.55), col);   // (shaft shortened)
     // label
     ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = `${Math.round(10 * dpr)}px system-ui, sans-serif`; ctx.textAlign = 'center';
     ctx.fillText(S.phase === 'pull' ? 'release' : 'pull ↓', cx, H - 6 * dpr);
@@ -2107,5 +2172,5 @@
   requestAnimationFrame(frame);
 
   // expose for console debugging / automated tests
-  window.qb = { railDist: (x, y, a) => noseDist(x, y, -Math.cos(a), -Math.sin(a)), eff: () => computeEffTip(), world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot, startLesson, lessonNext: () => scriptNext(), lessonBack: () => scriptBack(), moveUserGB: (x, y) => moveUserGB({ x, y }) };
+  window.qb = { railDist: (x, y, a) => noseDist(x, y, -Math.cos(a), -Math.sin(a)), eff: () => computeEffTip(), world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot, startLesson, selectCue, lessonNext: () => scriptNext(), lessonBack: () => scriptBack(), moveUserGB: (x, y) => moveUserGB({ x, y }) };
 })();

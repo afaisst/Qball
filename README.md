@@ -25,6 +25,7 @@ To host it, any static web host works. For example, turn on **GitHub Pages** (Se
 
 - **Physics, not animation:** every ball carries a velocity and a spin vector. Sliding and rolling friction, side-spin decay, cue-tip contact with miscues, squirt (cue deflection), swerve/massé with an elevated cue, ball–ball throw, and a research-based cushion model ([Mathavan et al. 2010](#references)). See [Physics model](#physics-model).
 - **Spin and elevation:** pick the tip contact point on a cue-ball diagram and raise the cue butt on a side view. Hitting outside the dashed ring is a miscue.
+- **Two cues:** a playing cue and a **break cue** (hard phenolic tip, swung all-out: the cue ball leaves at up to ~13 m/s instead of ~8). Pick one in the panel's cue rack or press <kbd>B</kbd>; after the break in a game the playing cue comes back.
 - **Rail clearance:** within 20 cm of a cushion, the cue has to pass over the rail. The part of the cue ball you can't reach is shaded red, and raising the cue shrinks it. When the cue lies over a pocket, there's no cushion under it, so the obstacle is the rail behind the hole: farther back, which frees up draw shots.
 - **Games:** 8-, 9- and 10-ball racks plus free practice. 9-ball and 10-ball use (simplified) foul rules with ball in hand.
 - **Lessons:** step-by-step introductions with explanations and camera moves (Lesson 1: aiming with the ghost ball, Lesson 2: the stop shot).
@@ -47,6 +48,7 @@ Choose a **9 ft** (tournament, 100" × 50" playing surface; the default), **8 ft
 | Aim | Move the mouse. **Click** on the table to freeze the aim, so you can go to the panel without losing it; click again to release (a shot also releases it). <kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> coarse, <kbd>Alt</kbd> extra fine). <kbd>Space</kbd> locks the aim. |
 | Shoot | Press anywhere on the table, drag back to pull the cue, release. <kbd>Esc</kbd> cancels. |
 | Spin | Click/drag on the cue-ball diagram, or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>. <kbd>C</kbd> or double-click centers it. |
+| Cue | The cue rack in the panel: playing cue or break cue. <kbd>B</kbd> switches. |
 | Cue elevation | Drag the side-view diagram, or <kbd>E</kbd> raise / <kbd>Q</kbd> lower. Double-click for a level cue. |
 | Ball in hand | Drag the cue ball where you want it. |
 | View | 2D / Split / 3D in the top bar. <kbd>V</kbd> cycles; the choice is remembered. |
@@ -126,7 +128,9 @@ Draw shots and raised-cue shots leave a small chalk mark on the cloth, like on a
 | Ball–ball friction | μ = 0.00995 + 0.108·e^(−1.088·slip) (measured curve) |
 | Cushion model | Mathavan 2010 (alternatives: Han 2005, simple) |
 | Cushion restitution / friction | e = 0.85 (−0.018 per m/s), μc = 0.25, nose at 63.5% of ball height |
-| Cue | 0.54 kg, end mass 3 g (squirt), tip friction 0.66, max speed 6 m/s, elevation 0–80° |
+| Playing cue | 0.54 kg (19 oz), tip efficiency 0.80, end mass 3 g (squirt), tip friction 0.66, max speed 6 m/s (cue ball ≈ 8 m/s), elevation 0–80° |
+| Break cue | 0.567 kg (20 oz), phenolic tip: efficiency 0.90, tip friction 0.55 (miscues sooner), end mass 8 g, max speed 9 m/s (cue ball ≈ 13 m/s) |
+| Ball contact (groups) | Hertz, E = 5 GPa, ν = 0.35 (contact ≈ 0.25 ms) |
 | Timestep | 0.2 ms, with exact rewind to each collision |
 
 The defaults were tuned by feel against real shots (e.g. 3-rail and kick shots) and can all be changed in test mode.
@@ -147,6 +151,8 @@ which reduces to Alciatore's TP A.30 for a level cue. This gives speed and all t
 
 **Ball–ball collisions.** A normal impulse with restitution, plus friction at the contact. Friction uses the measured μ(slip) curve and the spins of both balls. This produces cut-induced throw (≈3.5° for a slow 30° stun cut, <1° when fast) and spin-induced throw, and transfers a little spin to the object ball.
 
+**Groups of touching balls (the break, frozen balls).** One-pair-at-a-time impulses fail in a rack: the order of the pairs decides where the energy goes, and on the break the head ball handed almost everything to one neighbour, so a single ball shot out of a back corner at nearly the cue ball's speed while the rest barely moved. Real balls are a little elastic; a contact lasts about 0.25 ms, much longer than a push needs to cross the tiny gaps in a rack, so all the contacts act together. When a collision involves a ball that touches (within 1.5 mm) other balls, the whole group is integrated with Hertz contact forces (F ∝ δ^1.5) in 2 µs steps until every contact lets go, with the same restitution and ball–ball friction as the impulse model (the two agree within 0.3° of throw for a single pair). On the break the energy now spreads through the rack: the back corner balls and the wing balls leave fastest, the head ball slowly, and the cue ball stops or bounces back a little. A frozen combination passes nearly all the speed to the far ball.
+
 **Cushions** (selectable):
 
 - **Mathavan 2010** (default): the impact is integrated through compression and restitution. Friction acts both at the cushion nose and at the slate, where the cushion presses the ball into the cloth. Topspin, slide and running/reverse english all shape the rebound.
@@ -162,6 +168,7 @@ node test/physics_test.js      # rolling speed 5/7, slide/roll distances, 30°/9
                                # stop/draw/follow, english off the rail, squirt, throw, massé, miscues
 node test/compare_cushions.js  # compares the cushion models
 node test/replay_shot.js shot.json [param=value …]   # replays a copied shot, listing every contact
+node test/break_test.js 8ball '{}' 6,9 20             # break statistics over 20 racks at cue speeds 6 and 9 m/s
 ```
 
 The tests need [Node.js](https://nodejs.org) and print measured values next to the theoretical ones.

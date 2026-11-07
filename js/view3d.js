@@ -453,17 +453,27 @@ window.QB = window.QB || {};
       for (const l of this.simpleLights || []) l.visible = !on;
     }
 
+    // one model per cue in the rack (QB.CUES); setCueLook picks the one in the player's hands
     buildCue() {
-      const g = this.cue = new THREE.Group();
       const L = C.CUE_LEN, hw = (d) => 0.0065 + (0.0145 - 0.0065) * (d / L);
-      const seg = (d0, d1, color, rough = 0.5) => {
-        const m = new THREE.Mesh(new THREE.CylinderGeometry(hw(d1), hw(d0), d1 - d0, 24),
-          new THREE.MeshStandardMaterial({ color, roughness: rough }));
-        m.position.y = (d0 + d1) / 2; m.castShadow = true; g.add(m);
-      };
-      seg(0, 0.006, 0x3b6fd8, 0.9); seg(0.006, 0.03, 0xf2efe6); seg(0.03, 0.80, 0xe3c48f, 0.4);
-      seg(0.80, 1.02, 0x2a1408); seg(1.02, 1.30, 0x151515, 0.8); seg(1.30, L, 0x2a1408);
-      this.scene.add(g);
+      this.cueModels = {};
+      for (const cueDef of Object.values(QB.CUES)) {
+        const g = new THREE.Group();
+        cueDef.look.forEach(([d0, d1, color], i) => {
+          d1 = Math.min(d1, L);
+          const rough = i === 0 ? (cueDef.id === 'play' ? 0.9 : 0.45) : i === 2 ? 0.4 : 0.55;
+          const m = new THREE.Mesh(new THREE.CylinderGeometry(hw(d1), hw(d0), d1 - d0, 24),
+            new THREE.MeshStandardMaterial({ color, roughness: rough }));
+          m.position.y = (d0 + d1) / 2; m.castShadow = true; g.add(m);
+        });
+        g.visible = false; this.scene.add(g); this.cueModels[cueDef.id] = g;
+      }
+      this.cue = this.cueModels.play;
+    }
+    setCueLook(id) {
+      const g = this.cueModels[id]; if (!g || g === this.cue) return;
+      g.position.copy(this.cue.position); g.quaternion.copy(this.cue.quaternion); g.userData.ghost = undefined;
+      this.cue.visible = false; this.cue = g;
     }
 
     buildAids() {
@@ -628,7 +638,7 @@ window.QB = window.QB || {};
         const o = hit.object;
         if (!o.isMesh || !o.visible) continue;
         let skip = false;
-        for (let q = o; q; q = q.parent) if (q === this.cue || q === this.ghost) skip = true;   // see-through helpers
+        for (let q = o; q; q = q.parent) if (q === this.ghost || Object.values(this.cueModels).includes(q)) skip = true;   // see-through helpers
         if (skip || (o.material && o.material.transparent && o.material.opacity < 0.6)) continue;
         for (const b of balls) {                                                            // a ball?
           const m = this.balls.get(b.id);

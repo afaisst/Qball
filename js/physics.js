@@ -89,7 +89,7 @@ window.QB = window.QB || {};
   // Squirt (shaft end mass m_e) rotates the launch direction away from the english side:
   //   tan(s) = 5/2 (a/R) sqrt(1-(a/R)^2) / (1 + m/m_e + 5/2 (1-(a/R)^2))
   QB.cueImpact = function (P, cueSpeed, aim, tipX = 0, tipY = 0, elev = 0) {
-    const m = C.BALL_M, M = C.CUE_MASS, eT = C.TIP_E, I = 0.4 * m * R * R;
+    const m = C.BALL_M, M = P.cueMass || C.CUE_MASS, eT = P.tipE || C.TIP_E, I = 0.4 * m * R * R;
     const dx = Math.cos(aim), dy = Math.sin(aim), ce = Math.cos(elev), se = Math.sin(elev);
     let rho2 = tipX * tipX + tipY * tipY;
     if (rho2 > C.TIP_MAX * C.TIP_MAX) { const f = C.TIP_MAX / Math.sqrt(rho2); tipX *= f; tipY *= f; rho2 = C.TIP_MAX * C.TIP_MAX; }
@@ -365,6 +365,101 @@ window.QB = window.QB || {};
       }
     }
 
+    // ---- groups of touching balls (the break, frozen balls) ----
+    // An impulse model resolves contacts one pair at a time, so in a rack the order of the pairs decides where the
+    // energy goes: the head ball hands everything to one neighbour, and one ball shoots out of a back corner while
+    // the rest barely move. Real balls are slightly elastic: a contact lasts about 0.25 ms, much longer than the
+    // time a push needs to cross the tiny gaps in a rack, so all the contacts act at once and share the energy.
+    // When a collision involves a ball that touches (within 1.5 mm) further balls, that whole group is integrated
+    // with Hertz contact forces (F = k·δ^1.5, phenolic balls) in 2 µs steps until every contact has let go.
+    // Restitution: on unloading the force is e² × the loading force (so a single contact gives back e of the speed),
+    // and ball–ball friction acts at every contact as in the impulse model (throw, spin transfer).
+    clusterOf(a, b) {
+      const tol = 2 * R + 0.0015, tol2 = tol * tol, out = [a, b], seen = new Set([a, b]);
+      for (let i = 0; i < out.length; i++) {
+        const p = out[i];
+        for (const q of this.balls) {
+          if (seen.has(q) || !q.onTable) continue;
+          const dx = q.x - p.x, dy = q.y - p.y;
+          if (dx * dx + dy * dy < tol2) { seen.add(q); out.push(q); }
+        }
+      }
+      return out;
+    }
+    solveCluster(cl, a0, b0, h) {
+      const P = this.params, m = C.BALL_M, I = 0.4 * m * R * R, n = cl.length, D = 2 * R;
+      // rewind everyone to the moment the colliding pair touched
+      const px = b0.x - a0.x, py = b0.y - a0.y, wx = b0.vx - a0.vx, wy = b0.vy - a0.vy;
+      const pw = px * wx + py * wy, ww = wx * wx + wy * wy, d2 = px * px + py * py;
+      let s = ww > 0 ? (pw + Math.sqrt(Math.max(0, pw * pw - ww * (d2 - D * D)))) / ww : 0;
+      s = Math.min(Math.max(s, 0), h);
+      for (const q of cl) { q.x -= q.vx * s; q.y -= q.vy * s; }
+      const Es = C.BALL_E_MOD / (2 * (1 - C.BALL_NU * C.BALL_NU)), k = 4 / 3 * Es * Math.sqrt(R / 2);
+      const e2 = P.eBall * P.eBall, dt = 2e-6;
+      const pairs = new Map();                 // per pair: first contact data, peak approach speed, friction impulse
+      const fx = new Float64Array(n), fy = new Float64Array(n), tw = new Float64Array(3 * n);
+      let t = 0;
+      for (let step = 0; step < 6000; step++) {     // (12 ms at most)
+        fx.fill(0); fy.fill(0); tw.fill(0);
+        let touching = false;
+        for (let i = 0; i < n; i++) {
+          const A = cl[i];
+          for (let j = i + 1; j < n; j++) {
+            const B = cl[j];
+            let nx = B.x - A.x, ny = B.y - A.y; const dd = nx * nx + ny * ny;
+            if (dd >= D * D) continue;
+            const d = Math.sqrt(dd) || 1e-12; nx /= d; ny /= d;
+            const delta = D - d, vn = (A.vx - B.vx) * nx + (A.vy - B.vy) * ny;   // > 0: pressing together
+            touching = true;
+            const key = A.id * 64 + B.id;
+            let pr = pairs.get(key);
+            if (!pr) {
+              pr = { A, B, t, nx, ny, vmax: 0, jt: 0, ax: A.x, ay: A.y, bx: B.x, by: B.y,
+                pre: { avx: A.vx, avy: A.vy, bvx: B.vx, bvy: B.vy, aSlip: A.slip(), bSlip: B.slip(), aw: [A.wx, A.wy, A.wz], bw: [B.wx, B.wy, B.wz] } };
+              pairs.set(key, pr);
+            }
+            if (vn > pr.vmax) pr.vmax = vn;
+            let F = k * delta * Math.sqrt(delta);
+            if (vn < 0) F *= e2;                                      // unloading
+            fx[i] -= F * nx; fy[i] -= F * ny; fx[j] += F * nx; fy[j] += F * ny;
+            // friction at the contact: slip u = (vA + wA × R n) − (vB + wB × (−R n))
+            if (P.ballFriction > 0) {
+              const ux = (A.vx - R * A.wz * ny) - (B.vx + R * B.wz * ny);
+              const uy = (A.vy + R * A.wz * nx) - (B.vy - R * B.wz * nx);
+              const uz = R * (A.wx * ny - A.wy * nx) + R * (B.wx * ny - B.wy * nx);
+              const un = ux * nx + uy * ny, tx = ux - un * nx, ty = uy - un * ny, tz = uz, sl = Math.hypot(tx, ty, tz);
+              if (sl > 1e-9) {
+                const jt = Math.min(ballFriction(P, sl) * F * dt / m, sl / 7);      // per unit mass, this step
+                const hx = tx / sl, hy = ty / sl, hz = tz / sl;
+                fx[i] -= jt * m / dt * hx; fy[i] -= jt * m / dt * hy; fx[j] += jt * m / dt * hx; fy[j] += jt * m / dt * hy;
+                const k5 = 5 / (2 * R) * jt, cx = ny * hz, cy = -nx * hz, cz = nx * hy - ny * hx;
+                tw[3 * i] -= k5 * cx; tw[3 * i + 1] -= k5 * cy; tw[3 * i + 2] -= k5 * cz;
+                tw[3 * j] -= k5 * cx; tw[3 * j + 1] -= k5 * cy; tw[3 * j + 2] -= k5 * cz;
+                pr.jt += jt;
+              }
+            }
+          }
+        }
+        if (!touching && step > 0) break;
+        for (let i = 0; i < n; i++) {
+          const q = cl[i];
+          q.vx += fx[i] / m * dt; q.vy += fy[i] / m * dt;
+          q.wx += tw[3 * i]; q.wy += tw[3 * i + 1]; q.wz += tw[3 * i + 2];
+          q.x += q.vx * dt; q.y += q.vy * dt;
+        }
+        t += dt;
+      }
+      // back on the clock: the contacts took t, the rewind was s
+      const adv = Math.max(0, s - t);
+      for (const q of cl) { q.x += q.vx * adv; q.y += q.vy * adv; }
+      const list = [...pairs.values()].sort((p, q) => p.t - q.t);
+      for (const pr of list) {
+        const A = pr.A, B = pr.B;
+        this.events.push({ type: 'ball', t: this.time - s + pr.t, a: A.id, b: B.id, speed: pr.vmax, nx: pr.nx, ny: pr.ny,
+          ax: pr.ax, ay: pr.ay, bx: pr.bx, by: pr.by, pre: pr.pre, post: { avx: A.vx, avy: A.vy, bvx: B.vx, bvy: B.vy }, throwJ: pr.jt, cluster: n });
+      }
+    }
+
     resolveCollisions(h) {
       const P = this.params, balls = this.balls, segs = this.table.segments;
       const D = 2 * R, D2 = D * D;
@@ -379,6 +474,8 @@ window.QB = window.QB || {};
             if (d2 >= D2 - 1e-12) continue;
             const wx = b.vx - a.vx, wy = b.vy - a.vy;
             const pw = px * wx + py * wy;
+            // balls touching (or almost touching) other balls -- a rack, frozen balls -- collide all at once
+            if (pw < 0) { const cl = this.clusterOf(a, b); if (cl.length >= 3) { this.solveCluster(cl, a, b, h); hit = true; continue; } }
             if (pw >= 0) { // overlapping but separating: just separate
               const d = Math.sqrt(d2) || 1e-9, push = (D - d) / 2 + 1e-9;
               a.x -= px / d * push; a.y -= py / d * push; b.x += px / d * push; b.y += py / d * push;

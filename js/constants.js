@@ -36,6 +36,8 @@ QB.C = {
   // --- Balls ---
   BALL_R: 0.028575,       // 2.25" diameter
   BALL_M: 0.17,           // kg (6 oz)
+  BALL_E_MOD: 5.0e9,      // Pa, Young's modulus of phenolic resin (ball-ball contact ~0.25 ms; used for groups of touching balls)
+  BALL_NU: 0.35,          // Poisson's ratio
   G: 9.81,
 
   // --- Simulation ---
@@ -56,12 +58,28 @@ QB.C = {
   CUE_LEN: 1.47,          // 58" cue (visual)
 };
 
+// The cues in the player's rack. Each cue sets the cue-related physics parameters (mass, tip efficiency, tip
+// friction, shaft end mass) and how fast it can be swung; `look` = its segments from the tip (d0, d1 in m, colour).
+//  - Playing cue: 19 oz, layered leather tip (soft, grips the chalk well: spin up to ~0.55R).
+//  - Break cue: 20 oz, hard phenolic tip and ferrule. The hard tip loses less energy (efficiency 0.90 vs 0.80) and
+//    the cue is swung all-out (up to 9 m/s instead of 6): the cue ball leaves at up to ~13 m/s (~30 mph), a strong
+//    pro break. The phenolic tip holds chalk less well (miscue sooner) and the stiff shaft squirts more.
+QB.CUES = {
+  play: { id: 'play', name: 'Playing cue', note: '19 oz · leather tip', cueMass: 0.54, tipE: 0.80, tipFriction: 0.66, cueEndMass: 0.003, maxSpeed: 6.0,
+    look: [[0, 0.006, '#3b6fd8'], [0.006, 0.03, '#f2efe6'], [0.03, 0.80, '#e3c48f'], [0.80, 1.02, '#2a1408'], [1.02, 1.30, '#1a1a1a'], [1.30, 1.47, '#2a1408']] },
+  break: { id: 'break', name: 'Break cue', note: '20 oz · phenolic tip', cueMass: 0.567, tipE: 0.90, tipFriction: 0.55, cueEndMass: 0.008, maxSpeed: 9.0,
+    look: [[0, 0.006, '#cfc6ad'], [0.006, 0.045, '#f6f3ea'], [0.045, 0.80, '#e8cc95'], [0.80, 0.99, '#111111'], [0.99, 1.02, '#c21d1d'], [1.02, 1.30, '#7a1212'], [1.30, 1.47, '#111111']] },
+};
+QB.CUE_PARAMS = ['cueMass', 'tipE', 'tipFriction', 'cueEndMass'];
+
 // Tunable physics parameters (exposed in the test panel).
 QB.defaultParams = function () {
   return {
     muSlide: 0.11,   // ball-cloth sliding friction coefficient (typ. 0.15-0.25)
     muRoll: 0.0155,  // rolling resistance coefficient (literature 0.005-0.015; tuned by feel)
     spinDecel: 20.0, // rad/s^2, decay of vertical-axis (side) spin
+    cueMass: 0.54,   // kg, cue mass (the selected cue sets this)
+    tipE: 0.80,      // cue tip–ball collision efficiency (restitution); hard phenolic break tips ~0.9
     cueEndMass: 0.003, // kg, effective end mass of the shaft -> squirt (0 = no squirt; low-deflection ~0.005)
     tipFriction: 0.66, // chalked tip-ball friction; miscue when tan(offset angle) > this -> limit = mu/sqrt(1+mu^2) = 0.55R
     ballFriction: 1.0, // scale on measured ball-ball friction (0.01-0.11 vs slip speed) -> throw; 0 = frictionless

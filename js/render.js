@@ -400,12 +400,8 @@ window.QB = window.QB || {};
       // shadow
       const sh = 1 + 4 * Math.sin(elev); // raised cue -> shadow further away
       ctx.save(); ctx.translate(this.px(0.012 * sh), this.px(0.018 * sh)); poly(0, len, hw(0), hw(len), 'rgba(0,0,0,0.3)'); ctx.restore();
-      poly(0, 0.006, hw(0), hw(0.006), '#3b6fd8');                 // chalked tip
-      poly(0.006, 0.03, hw(0.006), hw(0.03), '#f2efe6');           // ferrule
-      poly(0.03, 0.80, hw(0.03), hw(0.80), '#e3c48f');             // maple shaft
-      poly(0.80, 1.02, hw(0.80), hw(1.02), '#2a1408');             // forearm
-      poly(1.02, 1.30, hw(1.02), hw(1.30), '#1a1a1a');             // wrap
-      poly(1.30, len, hw(1.30), hw(len), '#2a1408');               // butt
+      // tip, ferrule, maple shaft, forearm, wrap, butt (QB.CUES[...].look)
+      for (const [d0, d1, col] of (this.cueLook || QB.CUES.play.look)) poly(d0, Math.min(d1, len), hw(d0), hw(Math.min(d1, len)), col);
       ctx.restore();
     }
 
