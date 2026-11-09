@@ -555,8 +555,15 @@ window.QB = window.QB || {};
         cueDef.look.forEach(([d0, d1, color], i) => {
           d1 = Math.min(d1, L);
           const rough = i === 0 ? (cueDef.id === 'play' ? 0.9 : 0.45) : i === 2 ? 0.4 : 0.55;
-          const m = new THREE.Mesh(new THREE.CylinderGeometry(hw(d1), hw(d0), d1 - d0, 24),
-            new THREE.MeshStandardMaterial({ color, roughness: rough }));
+          const mat = new THREE.MeshStandardMaterial({ color, roughness: rough });
+          if (i === 0 && d0 === 0) {
+            // the tip is shaped round, like a real one (about a dime's radius, 9 mm); the dome's crown is at d = 0
+            const a = hw(0), Rc = 0.009, th = Math.asin(Math.min(1, a / Rc)), h = Rc * (1 - Math.cos(th));
+            const dome = new THREE.Mesh(new THREE.SphereGeometry(Rc, 24, 6, 0, Math.PI * 2, 0, th), mat);
+            dome.rotation.x = Math.PI; dome.position.y = Rc; dome.castShadow = true; g.add(dome);
+            d0 = h;
+          }
+          const m = new THREE.Mesh(new THREE.CylinderGeometry(hw(d1), hw(d0), d1 - d0, 24), mat);
           m.position.y = (d0 + d1) / 2; m.castShadow = true; g.add(m);
         });
         g.visible = false; this.scene.add(g); this.cueModels[cueDef.id] = g;
@@ -875,6 +882,12 @@ window.QB = window.QB || {};
     jumpPose(J) {
       const ux = Math.cos(J.aim), uy = Math.sin(J.aim), mx = J.x + ux * 0.45, my = J.y + uy * 0.45;
       let px = -uy, py = ux; if (mx * px + my * py < 0) { px = -px; py = -py; }
+      if (J.follow) {                 // lesson replays: travel beside the cue ball along the shot line, low over the cloth
+        const T = J.track || { x: J.x, y: J.y }, s = Math.max(0, (T.x - J.x) * ux + (T.y - J.y) * uy);
+        J.s = J.s === undefined ? s : J.s + (s - J.s) * 0.1;
+        const cx = J.x + ux * (J.s + 0.12), cy = J.y + uy * (J.s + 0.12);
+        return { eye: [cx + px * 0.75, cy + py * 0.75, 0.12], target: [cx, cy, 0.035], fov: 40 };
+      }
       const eye = [mx + px * 0.8 - ux * 0.12, my + py * 0.8 - uy * 0.12, 0.17];
       // the camera stays put but turns to follow the ball in the air (also one flying off the table)
       const T = J.track, k = T ? Math.min(1, Math.hypot(T.x - mx, T.y - my) / 0.5) : 0;
@@ -915,7 +928,7 @@ window.QB = window.QB || {};
       this._wasOver = over;
       // a jump shot: watch it from the side, low over the cloth (st.jumpView = the shot: start point and direction)
       const side = !!st.jumpView && !this.walk;
-      if (side) pose = this.jumpPose(st.jumpView);
+      if (side) { pose = this.jumpPose(st.jumpView); this.lastJumpPose = pose; }
       if (this._wasSide !== undefined && side !== this._wasSide && this.lastPose) this.trans = { from: this.lastPose, t: 0, dur: side ? 0.35 : 0.8 };
       this._wasSide = side;
       // standing up / going back to the shot: blend the camera over ~0.4 s instead of jumping
@@ -1063,11 +1076,12 @@ window.QB = window.QB || {};
     // (a red dot) and see-through balls (the ghost ball the player placed, the right answer)
     // m = { lines: [{pts: [{x,y}...], color, width}], dot: {x, y, z}, balls: [{x, y, color, opacity}] }
     lessonMarks(m) {
-      const L = this.lm || (this.lm = { ribbons: [], balls: [], dot: null });
-      let nr = 0, nb = 0;
+      const L = this.lm || (this.lm = { ribbons: [], balls: [], dot: null, rings: [] });
+      let nr = 0, nb = 0, ng = 0;
       if (m) {
         for (const ln of m.lines || []) for (let i = 0; i + 1 < ln.pts.length; i++) {
           const a = ln.pts[i], b = ln.pts[i + 1], len = Math.hypot(b.x - a.x, b.y - a.y); if (len < 1e-4) continue;
+          if (ln.dash && (i % 2)) continue;                      // dashed: every other piece (paths come in ~1 cm pieces)
           let r = L.ribbons[nr];
           if (!r) {
             r = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.85, depthWrite: false }));
@@ -1086,7 +1100,23 @@ window.QB = window.QB || {};
           s.material.color.set(q.color || 0xffffff); s.material.opacity = q.opacity || 0.35;
           s.position.set(q.x, q.y, R); s.visible = true; nb++;
         }
+        for (const q of m.rings || []) {                           // a ring on the cloth with an arrow pointing down at it
+          let g = L.rings[ng];
+          if (!g) {
+            g = new THREE.Group();
+            const ring = new THREE.Mesh(new THREE.RingGeometry(R * 1.1, R * 1.35, 40), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95, depthWrite: false }));
+            ring.position.z = 0.0018; ring.renderOrder = 2; g.add(ring);
+            const head = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.035, 16), new THREE.MeshBasicMaterial({}));
+            head.rotation.x = -Math.PI / 2; head.position.z = 2 * R + 0.03; g.add(head);
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.08, 8), new THREE.MeshBasicMaterial({}));
+            shaft.rotation.x = Math.PI / 2; shaft.position.z = 2 * R + 0.085; g.add(shaft);
+            this.scene.add(g); L.rings.push(g);
+          }
+          for (const c of g.children) c.material.color.set(q.color || 0xffffff);
+          g.position.set(q.x, q.y, 0); g.visible = true; ng++;
+        }
       }
+      for (let i = ng; i < L.rings.length; i++) L.rings[i].visible = false;
       for (let i = nr; i < L.ribbons.length; i++) L.ribbons[i].visible = false;
       for (let i = nb; i < L.balls.length; i++) L.balls[i].visible = false;
       if (!L.dot) {

@@ -73,6 +73,8 @@
   .lesson .num { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 22px; color: #111;
     background: radial-gradient(circle at 35% 35%, #fff 0, #fff 30%, var(--accent) 31%); border: 3px solid var(--accent); }
   .lesson.two .num { background: radial-gradient(circle at 35% 35%, #fff 0, #fff 30%, #1f4fbf 31%); border-color: #1f4fbf; }
+  .lesson.three .num { background: radial-gradient(circle at 35% 35%, #fff 0, #fff 30%, #d33a2c 31%); border-color: #d33a2c; }
+  .lesson.four .num { background: radial-gradient(circle at 35% 35%, #fff 0, #fff 30%, #6a3fa0 31%); border-color: #6a3fa0; }
   .lesson h4 { margin: 4px 0 4px; font-size: 18px; }
   .lesson p { margin: 0; color: #c9d1d8; }
   table.keys { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 6px 0 20px; }
@@ -164,11 +166,17 @@
   <div class="figs">
     <figure><img src="assets/screenshots/lesson-ghost.jpg" alt="Lesson 1: the 2D view zoomed in on the ghost ball, with the line from the pocket through the 9-ball and the lesson card"><figcaption>Lesson 1: where the ghost ball is.</figcaption></figure>
     <figure><img src="assets/screenshots/lesson-eclipse.jpg" alt="Lesson 1: the 3D view along the cue line at a 30° cut; the red dot on the edge of the 9-ball marks where to aim, the inset shows the half-ball eclipse"><figcaption>Lesson 1: a 30° cut seen along the cue line. You aim at the edge of the 9 — a half-ball hit.</figcaption></figure>
+    <figure><img src="assets/screenshots/lesson-draw.jpg" alt="Lesson 2: the table from the side with three rings and arrows marking where the backspin ran out for a soft, a medium and a firm draw shot"><figcaption>Lesson 2: where the backspin runs out — soft, medium and firm.</figcaption></figure>
+    <figure><img src="assets/screenshots/lesson-side.jpg" alt="Lesson 3: the cue ball's paths off the head rail with a little and a lot of right spin, without squirt (white) and with squirt (green, dashed)"><figcaption>Lesson 3: right spin off the cushion, without and with squirt.</figcaption></figure>
   </div>
   <div class="lesson"><div class="num">1</div><div><h4>Aiming with the ghost ball</h4>
     <p>Where do you aim? At the <i>ghost ball</i>: the spot the cue ball has to take, touching the object ball on the line to the pocket. You see it from above, from behind the pocket and from the cue ball, in a straight shot and in 10°, 30° and 50° cuts. The aiming point moves from the centre of the object ball to its edge (30°, the half-ball hit) and into the air beside it (50°), and the <b>eclipse view</b> shows the easier way to aim: how much of the object ball the cue ball covers. Then you place the ghost ball yourself, aim and shoot, and Qball shows how far off you were.</p></div></div>
-  <div class="lesson two"><div class="num">2</div><div><h4>The stop shot</h4>
-    <p>Stop the cue ball dead where it hits the object ball. You try soft, medium and hard shots in the centre and a little below it, and see why a sliding cue ball stops and a rolling one follows.</p></div></div>
+  <div class="lesson two"><div class="num">2</div><div><h4>Follow and draw</h4>
+    <p>Where to hit the cue ball for <b>follow</b> and <b>draw</b>, named by the clock on the cue-ball picture. The aim is set; you choose the hitting point and pull the cue into a blue band that shows the right strength. Each draw shot is replayed in slow motion from the side, and a ring marks where the backspin runs out — the spot where a stop shot would happen. Softer, firmer and nearer the centre move that spot; a firm centre-ball hit makes the ball slide without spin.</p></div></div>
+  <div class="lesson three"><div class="num">3</div><div><h4>Side spin</h4>
+    <p><b>Side spin</b> at 3 and 9 o'clock: it does nothing on the cloth and changes the angle off the cushion. Shots straight into the rail with a little and a lot of spin, to the right and to the left, replayed from above with their paths drawn. Then <b>squirt</b> is switched on, and you see the cue ball leave the aiming line — more the farther off-centre you hit.</p></div></div>
+  <div class="lesson four"><div class="num">4</div><div><h4>The stop shot</h4>
+    <p>The straight <b>stop shot</b>. Hit the stop-shot point and the cue ball stops dead; then hit lower and higher, softer and firmer, watch the slow-motion replay and say what happened (stop, draw or follow). Finally, with the cue ball 5 cm farther back, you choose the hitting point and the strength yourself and have to stop it in a small circle — and see that a firm centre-ball hit works too at short range.</p></div></div>
   <p class="muted">More lessons are on the way.</p>
 </section>
 
@@ -268,6 +276,7 @@ open index.html        <span class="c"># this guide</span></pre>
 <section id="versions">
   <h2><span class="kicker">What's new</span>Version history</h2>
   <ul class="timeline">
+    <li><span class="ver">1.8</span><span class="date">8 Nov 2026</span><p><b>Three new lessons:</b> follow and draw, side spin, and the stop shot — with a clock on the cue-ball picture, a blue band on the cue for the strength to use, slow-motion replays from the side or from above, rings and paths that stay on the table to compare shots, questions to answer, and a shot you have to make to go on. They replace the old stop-shot lesson.</p></li>
     <li><span class="ver">1.7</span><span class="date">6 Nov 2026</span><p><b>Jump shots:</b> the ball leaves the cloth when the cue is raised and hit firmly, flies, bounces when it lands, can hit balls on the way down and can jump off the table. A short, light <b>jump cue</b>, and a slow-motion side view of every jump in 3D. A ball that flies off the table is a foul (ball in hand); it falls to the floor, bounces off the walls — denting the panelling or cracking a painting's glass — and rolls away. Touch-friendly hints in touch mode. This guide, now the landing page (the game moved to <code>play.html</code>).</p></li>
     <li><span class="ver">1.6</span><span class="date">6 Nov 2026</span><p><b>Full walk mode:</b> walk with the arrow keys, look around (and up and down) by dragging the 3D view; clicking the map just stands you up where you are. New README and screenshots.</p></li>
     <li><span class="ver">1.5</span><span class="date">6 Nov 2026</span><p><b>Realistic breaks:</b> touching balls now collide all at once, with an elastic contact model, so the break spreads through the rack instead of sending one ball out of the back. <b>Break cue</b> and a cue rack.</p></li>

@@ -1,0 +1,57 @@
+## Title
+The dynamics of a cue ball: Follow and Draw shot
+
+## Goals
+
+* Learn about how spin affects the cueball and how it can be used to obtain cueball placement. This lesson focuses on the follow and draw shot only. Lesson 3 is about side spins.
+
+
+## Script
+
+
+1. How to apply follow and draw spin to the ball
+- Player should learn where to hit the CB to apply spin, and what possibilities there are.
+- Everything should be fixed, including shoot strength. The player only controls where to hit the ball.
+- the view is in 3D aiming mode.
+
+Set up:
+( o=Object ball, c=cueball)
+------------^------------
+|            	   	|
+|		   		|
+|	  	<-   	  c   |
+|	    	   		|
+|		   		|
+------------v------------
+
+- The set up is always that the shot is along the long side of the table. Here about 1/4 of table, closer to the short rail, so we have enough run length to do the following experiments. First part will be follow and draw shot.
+
+a) First show some explanation of where the ball can be hit. Indicate top spin, bottom, left right on the CB visualization. Also note that there is a certain maximal distance from the center you can hit, else miscue. Say that we can refer to these hitting points by the clock. Maybe display a clock on top of the cueball visualization to visualize that: draw shot, 6 o'clock, follow 12 o'clock, left 9 o'clock, right 3 o'clock....
+Note that here we only focus on follow and draw shot, therefore 12 o'clock and 6 o'clock.
+
+b) Ask the player to play a follow shot. First give some explanation where this shot would be appropriate. Strength is fixed to medium strength. Player has to choose the hitting point on CB, however, it is indicated with a blue circle where to hit (let's say 12 o'clock, at maximal radius where no miscue). Player can only choose up/down on cue ball view. Player then shoots (strength fixed). If the player doesn't hit it where they should, make them do it again. Only continue with the next step if they did it right. Also, the player cannot skip.
+
+c) Next, the player should practice a draw shot. Same as in b), CB visualization should light up and indicate where to hit. This time 6 o'clock, maximal radius where no miscue. Again player can only choose up/down on the cueball hitting point. If the player selected correctly, let them shoot (medium strength, fixed). In this shot, it will be interesting to visualize the spin reverse point. After the shot, first stay in 3D after-shot overview. But then, replay the shot in slow motion, 3D view from the side, showing where the back draw reverses. Indicate with an arrow, and say that as soon as friction dominates the spin's rolling energy, the ball stops spinning and then reverses to forward spinning. Note that this is exactly the point where a stop shot would happen if there would be an OB and it would hit the OB. Explanation: cue ball doesn't have rotation when hitting the OB, and because the balls are nearly elastic, the kinetic energy is fully transferred to the OB, which makes the CB stop and the OB move. Indicate that point on the table by a white circle and explain that we are now experimenting how we can change the distance of this reversal point.
+
+d) go back to 3D aiming view and let the player aim the same way again. But this time, say that we try a less strong shot and see where the spin reverse point happens. Let the player shoot again (once the they choose the correct CB hitting point... as before), this time fixed at 1/4 strength. Like in c) after the shot, show in slow motion in 3D view from the side where the reversal point happens. Mark with a white circle again. Compare to the previous white circle and explain that the reversal point happens earlier, because cloth friction takes over earlier because we put less back spin on the ball, because we shot less strong.
+
+e) do the exact same as in d), but this time, 3/4 of the shot strength. Again compare the reversal point to the two previous ones.
+
+f) Now, in addition changing the shot strength, the hitting point on the CB also matters. Let the player redo c), but this time, indicate a CB hitting point that is closer to the center, let'w say 1/4 radius. Let the player do the same again and compare the reversal point to the point in c). Explain that now the reversal point is earlier, because again less spin is put on the ball. This time, not because of the strength of the shot (same as in c), but because of the hitting point on the CB. 
+
+g) Now, let's also see what happens if the CB is hit in the center. Same as c), but this time let player set the CB hitting point to the center ball. Shot strength should be 3/4. Again after shot go to 3D side view and indicate the reversal point. Explanation: hitting ball in center and strong, "pushes" the CB and make it slide for a while until friction dominates and forward rotation is established again. Explain that this method can be used for short-distance stop balls.
+
+
+## Summary:
+
+Summarize these results: what have we learned? The summary should be shown in 3D view from the side. For each explanation, the cue tip should be shown (from the side 3D view).
+* cue tip hitting CB on bottom half -> draw shot -> can either change reversal point by shot strength or distance from center.
+* cue tip hitting CB on top top half -> follow shot (not that strength of follow shot can be modulated by stronger shot or distance from center, similar as for the draw shot.
+
+ 
+-> end with reference to next lecture where we look at side spins.
+
+
+
+
+

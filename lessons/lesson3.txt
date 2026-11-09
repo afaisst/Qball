@@ -1,0 +1,64 @@
+## Title
+The dynamics of a cue ball: Side Spin
+
+## Goals
+
+* Learn about how spin affects the cueball and how it can be used to obtain cueball placement. This lesson focuses on the follow and draw shot only. Lesson 3 is about side spins.
+
+
+## Script
+
+
+1. How to apply side spin to the ball
+- Player should learn where to hit the CB to apply spin, and what possibilities there are.
+- Everything should be fixed, including shoot strength. The player only controls where to hit the ball.
+- the view is in 3D aiming mode.
+
+Set up:
+( o=Object ball, c=cueball)
+------------^------------
+|            	   	    |
+|		   		    |
+|	  <-	   c 		    |
+|	    	   		    |
+|		   		    |
+------------v------------
+
+- The set up is always that the shot is along the long side of the table. First part will be follow and draw shot. CB slightly before center table.
+
+a) First show some explanation of where the ball can be hit. Indicate top spin, bottom, left right on the CB visualization. Also note that there is a certain maximal distance from the center you can hit, else miscue. Say that we can refer to these hitting points by the clock. Maybe display a clock on top of the cueball visualization to visualize that: draw shot, 6 o'clock, follow 12 o'clock, left 9 o'clock, right 3 o'clock....
+Note that here we only focus on side spin, therefore 9 o'clock and 3 o'clock.
+
+
+b) First explain an important concept; pure side spin doesn't affect the ball while rolling. It only has an effect on the ball when it is hitting the side cushions. However, there are exception such as squirt and throw, affecting the CB and the OB's path. This will be explained later. 
+
+** note that squirt/deflection should be turned off for steps c-e **
+
+
+c) First, go to 3D aim mode. Let the player set up right spin (3 o'clock). Same as in lesson 2, indicate where to hit the CB in the CB visualization with a blue dot. Here about 1/4 radius (slight spin). Don't let the player skip and if they don't set the hitting point correct, they cannot advance (same as in lesson 2). Then let player shoot about 1/2 strength. Keep 3D aiming view so player can see that the CB reflects right after hitting the short rail. Replay the same shot from 2D view above. Explain that the spin catches on when touching the rail. Mark the path of the CB on the cloth by a white line.
+
+d) exactly the same as in c), but now maximal radius (obviously within limits). Same thing, but in 2D view explain that now we put more spin, therefore larger reflection angle. Add a white line also here and compare this one and the one from c).
+
+e) repeat steps c) and d) for left spin (9 o'clock). After e) is finished, remove these lines on the table, just keep the ones from c) and d) for the following experiment.
+
+
+f) Now, we proceed to explaining squirt or cue deflection. Explain what that means.
+
+g) repeat c) but with squirt on. We still have the previous path from c) on the table. Let the player do exactly the same (select CB hitting point, 1/4 radius) as before, but now with squirt on, the ball will deflect and hit the short rail slightly displaced. Indicate these lines as green-ish dashed lines. Explain what happened in 2D view.
+
+h) repeat g) but with the configuration of d): player selects maximal radius, 1/2 strength shot. The squirt is now more, which should be indicated by the new green-ish dashed lines. Explain what happens: hit more off center, more squirt.
+
+i) summarize: in order to counteract the squirt, we have to correct the aiming. This depends on the cue (low deflection or normal cue) and needs training and experience. Each cue plays differently. 
+
+### Summary
+What have we learned? Have all the lines displayed in 2D view for these explanations.
+* side spin only takes effect when cue ball hits the cushion. 
+* side spin can be modulated by strength of shot and distance from center
+* finally, also mention that the side spin can be combined with a draw of follow. This will be the topic of a later lesson.
+
+
+
+
+
+
+

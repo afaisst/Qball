@@ -147,7 +147,9 @@ main { position: relative; }
 .tray i b { width: 13px; height: 13px; font-size: 8.5px; }
 .tray i.up { opacity: 0.25; }
 .tray i.down { opacity: 1; }
-.tray i.next { opacity: 0.6; outline: 2px solid var(--accent); outline-offset: 2px; }
+.tray i.live { opacity: 1; }
+.tray i.gone { opacity: 0.22; filter: saturate(0.6); }
+.tray i.next { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tray i.avail { cursor: grab; }
 .tray i.avail:hover { transform: scale(1.12); }
 body.placing, body.placing * { cursor: grabbing !important; }
@@ -191,6 +193,8 @@ button, label.chk { touch-action: manipulation; }
   border-radius: 14px; padding: 18px 20px 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); font-size: 14px; line-height: 1.5; }
 #lessonModal h2, #settingsModal h2, #helpModal h2 { margin: 0 0 8px; font-size: 18px; }
 #lessonModal ul { padding-left: 20px; margin: 6px 0; }
+#lessonModal .lbox { max-width: 580px; font-size: 16px; line-height: 1.5; }
+#lessonModal h2 { font-size: 20px; }
 #lessonModal p { margin: 8px 0; }
 #lessonModal .key { background: rgba(242,194,0,0.12); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; }
 #lessonModal table { border-collapse: collapse; margin: 6px 0; width: 100%; }
@@ -247,24 +251,24 @@ button, label.chk { touch-action: manipulation; }
 #stage.only3d.showmap.walking #pane2d { width: min(42%, 520px); background: #1b2228; }
 
 /* ---------- scripted lessons: the coach card on the table ---------- */
-#coach { position: absolute; z-index: 20; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(560px, calc(100% - 24px));
+#coach { position: absolute; z-index: 20; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(660px, calc(100% - 24px));
   max-height: 60%; overflow-y: auto; background: rgba(20,26,32,0.94); border: 1px solid var(--line); border-radius: 12px;
-  padding: 8px 14px 10px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); font-size: 14px; line-height: 1.45; }
+  padding: 8px 14px 10px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); font-size: 16.5px; line-height: 1.5; }
 #coach[hidden] { display: none; }
-#coach .ch-head { display: flex; align-items: center; gap: 10px; padding-left: 28px; font-size: 11px; color: var(--muted); min-height: 22px; }
+#coach .ch-head { display: flex; align-items: center; gap: 10px; padding-left: 28px; font-size: 12.5px; color: var(--muted); min-height: 22px; }
 #coach .ch-head #coachStep { flex: 1; }
 #coach .cdots { display: inline-flex; gap: 4px; }
 #coach .cdots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 #coach .cdots i.done { background: rgba(63,191,111,0.7); }
 #coach .cdots i.on { background: var(--accent); }
-#coach h3 { margin: 4px 0 2px; font-size: 16px; }
+#coach h3 { margin: 4px 0 2px; font-size: 19px; }
 #coach.result h3 { color: #7fd99a; }
 #coach p { margin: 6px 0; }
 #coach ul { padding-left: 20px; margin: 6px 0; }
 #coach .key { background: rgba(242,194,0,0.12); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; }
 #coach .ch-btns { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 #coach .ch-btns .sp { flex: 1; }
-#coach .ch-btns .wait { color: var(--accent); font-size: 12px; font-style: italic; animation: coachPulse 1.4s ease-in-out infinite; }
+#coach .ch-btns .wait { color: var(--accent); font-size: 14px; font-style: italic; animation: coachPulse 1.4s ease-in-out infinite; }
 @keyframes coachPulse { 50% { opacity: 0.35; } }
 .lsteps.wrap { flex-wrap: wrap; }
 .lsteps.wrap span { flex: 1 1 30%; cursor: pointer; }
@@ -283,3 +287,17 @@ a.hdrbtn { background: var(--panel2); color: var(--text); border: 1px solid var(
 a.hdrbtn:hover { border-color: #47535c; }
 .lshort { display: none; }
 @media (max-width: 1440px) { #lnkDocs .lfull { display: none; } #lnkDocs .lshort { display: inline; } }
+/* lessons: answers that were wrong, and the cue-ball picture asking for attention */
+#coach .ch-btns .ch-answers { flex-basis: 100%; order: -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 2px 0 6px; }
+#coach .ch-btns button.answer { border-color: var(--accent2); }
+#coach .ch-btns button.wrong { border-color: #c0392b; color: #ff9b8f; text-decoration: line-through; }
+#coach .wrongmsg { color: #ff9b8f; }
+#coach .muted { opacity: 0.7; font-size: 0.92em; }
+#coach .ch-btns button { font-size: 15px; }
+@media (max-width: 640px) { #coach { font-size: 15px; } #coach h3 { font-size: 17px; } }
+#tipPad.want, #powerCue.want, #powerCue2.want { animation: tipWant 0.5s ease-in-out 3; }
+/* lessons: what the lesson card talks about pulses */
+.pointme { animation: pointMe 1.2s ease-in-out infinite; }
+@keyframes pointMe { 0%, 100% { box-shadow: 0 0 0 2px rgba(242,194,0,0.85), 0 0 4px rgba(242,194,0,0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(242,194,0,1), 0 0 22px 4px rgba(242,194,0,0.7); } }
+@keyframes tipWant { 50% { box-shadow: 0 0 0 3px var(--accent2), 0 0 18px rgba(79,179,255,0.7); } }

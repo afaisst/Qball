@@ -207,6 +207,13 @@ window.QB = window.QB || {};
       ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(this.sx(p.x), this.sy(p.y)) : ctx.moveTo(this.sx(p.x), this.sy(p.y))); ctx.stroke();
       ctx.restore();
     }
+    // a marked spot on the cloth (lessons: where the backspin ran out): a ring the size of a ball
+    drawRing(p, color) {
+      const ctx = this.ctx; ctx.save(); ctx.strokeStyle = color || '#ffffff'; ctx.lineWidth = Math.max(2, this.px(0.004));
+      ctx.beginPath(); ctx.arc(this.sx(p.x), this.sy(p.y), this.px(R * 1.25), 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(this.sx(p.x), this.sy(p.y), Math.max(1.5, this.px(0.003)), 0, Math.PI * 2); ctx.fillStyle = ctx.strokeStyle; ctx.fill();
+      ctx.restore();
+    }
     drawDot(p, r, color) {
       const ctx = this.ctx; ctx.save(); ctx.fillStyle = color || '#ff3b3b';
       ctx.beginPath(); ctx.arc(this.sx(p.x), this.sy(p.y), Math.max(2.5, this.px(r || 0.003)), 0, Math.PI * 2); ctx.fill(); ctx.restore();

@@ -100,8 +100,8 @@ assets/             icon, screenshots, the paintings (assets/art)
 
 Lesson scripts are written as plain text in [`lessons/`](../lessons) (for example `lessons/lesson1.txt`: the steps, the set-ups as little sketches, what the player sees and does) and turned into lesson definitions in `js/lessons.js`. The comment at the top of that file describes both kinds of lesson:
 
-- **Practice lessons** (the stop shot): balls, what the player may change, strength bands, steps and texts.
-- **Scripted lessons** (the ghost ball): set-ups made of *beats*. Each beat sets the view, a 2D zoom, a 3D camera move, which aiming aids show, extra marks (lines, the aiming dot, labels), and what the player has to do (read and press Next, take the shot, or place the ghost ball).
+- **Practice lessons** (none at the moment; the first stop-shot lesson was one): balls, what the player may change, strength bands, steps and texts.
+- **Scripted lessons** (all four lessons): set-ups made of *beats*. Each beat sets the view, a 2D zoom, a 3D camera move, which aiming aids show, extra marks (lines, the aiming dot, labels), and what the player has to do (read and press Next, take the shot, place the ghost ball, or watch a demonstration). A beat can also limit the cue tip (only up/down or sideways, a target circle, anywhere below or above a point) and draw a clock on the cue-ball picture, fix or free the strength, change the physics for that step (e.g. squirt off), measure the shot by running it again in a copy of the world (where the backspin runs out, how long the ball slides without spin, its path, stop / draw / follow after the contact), leave rings and paths on the table for later steps, replay the shot in slow motion (from the side, following the cue ball, or from above), ask a multiple-choice question about it, and require a result (e.g. the cue ball stopping in a circle) before the lesson goes on.
 
 ## References
 

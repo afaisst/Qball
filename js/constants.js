@@ -19,7 +19,7 @@ QB.C = {
   TABLE_L: QB.TABLE_SIZES[QB.tableFt].L,   // playing length (cushion nose to cushion nose)
   TABLE_W: QB.TABLE_SIZES[QB.tableFt].W,   // playing width
   CUSHION_W: 0.05,        // visual/physical depth of cushion rubber behind the nose line
-  RAIL_W: 0.11,           // wooden rail width (visual only)
+  RAIL_W: 0.13,           // wooden rail width (visual only; wide enough that the side pockets' back wall stays clear of the rounded outer edge)
 
   // Pockets (WPA: corner mouth 4.5"-4.625", side mouth 5"-5.125")
   CORNER_MOUTH: 0.1143,   // 4.5"

@@ -1,0 +1,50 @@
+## Title
+Cue Ball Placement: The Stop Shot I
+
+## Goals
+
+* Learn how to play a stop shot (SS) and how it can be used to play cueball placement. Here straight stop show with CB and OB aligned.
+
+
+## Script
+
+1. First refer to lessons 2 to learn how to apply back spin on a ball.
+
+2. The first set up is as follows: OB and CB in straight line, short side table.
+
+( o=Object ball, c=cueball)
+------------^------------
+|           o 	   	 |
+|		   		 |
+|	  	    		 |
+|	    	c  		 |
+|		   		 |
+------------v------------
+
+a) First we practice a simple stop shot. Start in 3D aiming view. Explain that we play a simple stop shot. Indicate the correct aiming point on the CB visualization by a green dot. Player has to click there. Then let player shoot (fixed strength, such that the stop shot is perfect). Replay the shot from the side view, focussing on the full length and slow motion. Player should see rotation of CB and stop shot. Note that here and in the following, the lesson only advances if the player selects the correct CB hitting point. Also, player cannot skip.
+
+b) Now, let the player experiment with the shot strength and the CB hitting point. First, let the player change the CB hitting point (along a vertical line from center downward). The nominal hitting point should be indicated.
+Tell the player to hit below the previous hitting point (i.e., more draw). Let player shoot (fixed strength, same as before). After show, show from the side again, slow motion. Ask the player what happens: perfect SS, draw, followed. If the player clicks the wrong answer, let them try again. Finally explain.
+
+c) repeat b) but now tell player to hit above the nominal hitting point (CB will keep rolling). Then the same as in b) -> multiple choice answer, player can only advance if correct answer selected.
+
+d) Explain that we have varied the CB hitting point here. But we can also change the shot strength. Repeat b) and c) but now the player can only choose the nominal hitting point, but can vary the strength. Give option A: less strong and option B: stronger, same as in cases b) and c). For each, again end with the question "What happened"? Perfect SS, ball drew back, ball kept rolling. (Player can only advance if correct answer).
+
+e) as a final experiment, move the CB closer to the OB (explain so, move the ball). Now, let the player itself make the perfect SS (give it a small area where the CB can land to be valid - similar to the stop shot drill!). The player can only choose vertical CB hitting, but can use any shot strength. Only advance if the player can stop the CB in the small area valid for a SS. 
+
+f) Finally, also explain that with enough shot strength, the player can also make a stop shot at short distances by hitting the CB in the center. This "pushes" the CB forward. Set this shot up and demonstrate.
+
+## Summary
+
+Summarize this first part, what have we learned?
+* stop shot can be modulated by shot strength and CB hitting point.
+* center CB hitting also works, if shot strength is enough. But usually only works on shorter distance.
+* refer to next lesson that will teach what happens if there is an angle between CB and OB.
+* also say that we have here also practiced the first draw shot! But this will discussed in more depth in another lesson.
+
+
+
+
+
+
+

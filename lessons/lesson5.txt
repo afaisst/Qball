@@ -1,0 +1,48 @@
+## Title
+Cue Ball Placement: The Stop Shot II
+
+## Goals
+
+* Learn how to play a stop shot (SS) and how it can be used to play cueball placement. Here shot shot with an angle between CB and OB
+
+
+## Script
+
+1. First refer to lessons 2 to learn how to apply back spin on a ball and to lesson 4 on how to do a straight stop shot. 
+
+2. The first set up is as follows: OB and CB in angle, about 25 degree, short side table.
+
+( o=Object ball, c=cueball)
+------------^------------
+|           o 	   	 |
+|		   		 |
+|	  	  c  		 |
+|	    	  		 |
+|		   		 |
+------------v------------
+
+
+The idea for this lesson is similar to lesson 4. The player should already have established the basics of a SS. Here we focus on where the CB will end up if CB/OB are place with an angle.
+
+a) first in 3D view aim mode. Keep shot strength fixed (about 1/2), but let player experiment with CB hitting point. First. Ask player to hit a normal shot, aiming at center CB. (Again, player has to select the correct CB hitting point before advancing to next step.). After show, go in 2D view an replay shot at slow motion. Record the tracks of the CB in white.
+
+b) same as a, but now, let player make a perfect stop shot. Indicate that on CB view the perfect SS hitting point. Player has to select it approximately right to advance. Say that this would normally be a perfect SS, but now we have an angle. Let the player shoot (fixed 1/2 strength). In 2D view, show the tracks of CB and OB. Note (indicate) that these tracks are in a 90 degree angle! For a perfect SS, the CB floats in a 90 degree angle from OB-pocket line.
+
+c) same as b) but now let the player select a CB hitting point below the nominal SS hitting point (draw shot). Player shoots. CB should now draw. Again show result in 2D view and indicate tracks. 
+
+d) same as b) bot now let player select a CB hitting point above the nominal SS hitting point (but still below center ball because we discuss follow shots later). Same thing, summarize in 2D view and indicate tracks.
+
+
+## Summary
+
+Summarize this first part, what have we learned? Show 2D view with all the tracks (maybe different colors)
+* perfect SS would displace ball in 90 degree angle.
+* changing the CB hitting point can modulate this angle.
+* refer to the next lessons, which are about draw shots, which we already indirectly have shown in this lesson.
+
+
+
+
+
+
+

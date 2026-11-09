@@ -163,6 +163,8 @@
   const AID_IDS = { aim: 'optAimLine', ghost: 'optGhost', cbpath: 'optCBPath', tangent: 'optTangent', tipmark: 'optTipMark', eclipse: 'optEclipse', overview: 'optOverview' };
   function aid(k) {
     const o = S.act && S.act.kind === 'lesson' && S.act.aids;
+    // lesson result after a shot: only the lesson's marks — no aiming lines from where the cue ball stopped
+    if (o && S.act.script && S.act.result && S.act.shotTaken && !S.replaying && ['aim', 'ghost', 'obpath', 'cbpath', 'tangent'].includes(k)) return false;
     if (o && o[k] !== undefined) return o[k];
     return AID_IDS[k] ? $(AID_IDS[k]).checked : true;
   }  // helper lines follow the real launch direction?
@@ -229,10 +231,24 @@
   }
 
   // ---------------- Shooting ----------------
-  function beginStrike(speed) {
-    if (scriptOn()) {                          // scripted lesson: shoot only when asked, at the lesson's strength
+  function beginStrike(speed, force) {
+    if (scriptOn() && !force) {                // scripted lesson: shoot only when asked, at the lesson's strength
       if (shotLocked()) { S.phase = 'aim'; S.pull = 0; setStatus(S.act.result ? 'Choose what to do next in the lesson card.' : 'Read the lesson card, then press Next.', true); return; }
-      speed = S.act.g.power;
+      const b = curBeat();
+      if (!tipOK(b)) {                         // the tip has to be where the step asks for
+        S.phase = 'aim'; S.pull = 0;
+        setStatus(`First put the tip ${beatTip(b).label || 'on the marked spot'} on the cue-ball picture.`, true);
+        const pad = $('tipPad'); pad.classList.remove('want'); void pad.offsetWidth; pad.classList.add('want');
+        clearTimeout(pad._wantT); pad._wantT = setTimeout(() => pad.classList.remove('want'), 1600);   // (also if animationend never comes)
+        return;
+      }
+      const rg = powerRange(b);               // the strength: anywhere in the step's range (the blue band on the cue)
+      if (rg && (speed < rg[0] || speed > rg[1])) {
+        S.phase = 'aim'; S.pull = 0;
+        setStatus(`${speed < rg[0] ? 'Too soft' : 'Too hard'} — pull the cue back into the blue band and let go.`, true);
+        for (const pc of powerCues) { pc.classList.remove('want'); void pc.offsetWidth; pc.classList.add('want'); clearTimeout(pc._wantT); pc._wantT = setTimeout(() => pc.classList.remove('want'), 1600); }
+        return;
+      }
     }
     if (!cue.onTable || speed <= 0) return;
     S.strikeSpeed = speed;
@@ -263,6 +279,7 @@
     // a jump: watch it from the side, in slow motion while a ball is in the air
     S.jumpView = imp.vz > 0.3 && $('optJumpCam').checked ? { x: S.setup[cue.id].x, y: S.setup[cue.id].y, aim: imp.angle, t: 0 } : null;
     if (imp.vz > 0.05) S.report.jumpUp = imp.vz;
+    if (S.replaying && S.replaying.side) S.jumpView = { x: S.setup[cue.id].x, y: S.setup[cue.id].y, aim: imp.angle, t: 0, follow: true, keep: true };
     S.ballInHand = false;
     S.pull = 0; S.phase = 'moving'; S.acc = 0;
     if (imp.miscue) setStatus('Miscue! The tip slid off the cue ball.', true); else setStatus('Rolling…');
@@ -621,14 +638,17 @@
   // ---------------- Cue tip (spin) selector ----------------
   const tipCanvas = $('tipPad');
   function setTip(x, y) {
-    if (S.act.kind === 'lesson') {             // lessons limit where the tip may go
-      const L = lessonById(S.act.id), tr = L.tipRange;
-      if (tr) { x = Math.max(tr.x[0], Math.min(tr.x[1], x)); y = Math.max(tr.y[0], Math.min(tr.y[1], y)); }
+    if (S.act.kind === 'lesson' && !S.replaying) {   // lessons limit where the tip may go
+      const L = lessonById(S.act.id), bt = scriptOn() ? beatTip() : null;
+      if (bt) {                                 // scripted lesson step: only up/down, only sideways, or fixed
+        if (bt.axis === 'y') x = 0; else if (bt.axis === 'x') y = 0;
+        else if (bt.axis === 'fixed' && bt.target) { x = bt.target.x; y = bt.target.y; }
+      } else if (L.tipRange) { const tr = L.tipRange; x = Math.max(tr.x[0], Math.min(tr.x[1], x)); y = Math.max(tr.y[0], Math.min(tr.y[1], y)); }
     }
     const r = Math.hypot(x, y), m = C.TIP_MAX;
     if (r > m) { x *= m / r; y *= m / r; }
     S.tipX = Math.round(x * 1000) / 1000; S.tipY = Math.round(y * 1000) / 1000;
-    drawTipPad(); syncTipInputs(); if (typeof drawElevPad === 'function') drawElevPad();
+    drawTipPad(); if (S.act.kind === 'lesson' && S.act.script) updatePointers(); syncTipInputs(); if (typeof drawElevPad === 'function') drawElevPad();
   }
   function tipLabel() {
     const v = eff().y, h = eff().x, parts = [];
@@ -995,12 +1015,12 @@
       const next = rotation && onTable.size ? Math.min(...onTable) : null;
       const place = a.id === 'place';
       $('tray').innerHTML = (a.rack || []).map(n => {
-        const cls = place ? (onTable.has(n) ? 'up' : 'down avail') : (onTable.has(n) ? 'up' : 'down');
+        const cls = place ? (onTable.has(n) ? 'up' : 'down avail') : (onTable.has(n) ? 'live' : 'gone');   // (games: pocketed balls fade)
         const tip = place ? (onTable.has(n) ? 'on the table (drag it there)' : 'drag onto the table') : (onTable.has(n) ? 'on the table' : 'pocketed');
         return `<i data-n="${n}" class="${n >= 9 ? 'stripe ' : ''}${cls}${n === next ? ' next' : ''}" style="background:${QB.BALL_COLORS[n]}" title="${n}-ball ${tip}"><b>${n}</b></i>`;
       }).join('');
       $('trayLabel').textContent = a.id === 'place' ? 'Drag a ball onto the table (faded = already on the table)'
-        : rotation ? 'Balls (pocketed = solid, next ball ringed)' : 'Balls (pocketed = solid)';
+        : 'Balls';
     }
   }
 
@@ -1124,7 +1144,7 @@
   }
   // on the cue-ball diagram: the line the tip may move on, and the step's target
   function lessonPadOverlay(ctx, c, r, dpr) {
-    const L = lessonById(S.act.id); if (L.script) return;
+    const L = lessonById(S.act.id); if (L.script) { scriptPadOverlay(ctx, c, r, dpr); return; }
     const st = lessonStepObj(), tr = L.tipRange;
     ctx.save();
     ctx.strokeStyle = 'rgba(59,111,216,0.45)'; ctx.lineWidth = 3 * dpr; ctx.lineCap = 'round';
@@ -1164,6 +1184,18 @@
   function scriptOn() { return isScript() && !S.act.done; }
   const curScene = () => lessonById(S.act.id).scenes[S.act.scene];
   const curBeat = () => curScene().beats[S.act.beat];
+  // a step's tip rule; it may depend on the set-up (e.g. the stop-shot hitting point found for this table)
+  function beatTip(b) { const t = (b || curBeat()).tip; return typeof t === 'function' ? t(S.act.g) : t; }
+  // a lesson shot's strength range [min, max] in m/s of cue speed (null: any): the step's strength ± 12% (at least
+  // ± 0.2 m/s), or `powerTol` (m/s); 'free' = any strength
+  function powerRange(b) {
+    b = b || curBeat();
+    if (!b || b.task !== 'shot' || b.power === 'free') return null;
+    const g = S.act.g, v = typeof b.power === 'function' ? b.power(g) : typeof b.power === 'number' ? b.power : g.power;
+    if (!v) return null;
+    const hw = b.powerTol !== undefined ? b.powerTol : Math.max(0.12 * v, 0.2);
+    return [Math.max(0.05, v - hw), Math.min(maxSpeed(), v + hw)];
+  }
   function ptOf(k) {
     if (!k) return null;
     if (typeof k !== 'string') return k;
@@ -1175,6 +1207,11 @@
     return { x: list.reduce((s, p) => s + p.x, 0) / list.length, y: list.reduce((s, p) => s + p.y, 0) / list.length };
   }
   function camPose(c) {
+    if (c.side) {                               // from the side of a ball, square to the shot line, low over the cloth
+      const P = ptOf(c.side), Q = ptOf(c.toward || 'AIM'), l = Math.hypot(Q.x - P.x, Q.y - P.y) || 1, ux = (Q.x - P.x) / l, uy = (Q.y - P.y) / l;
+      const sg = c.flip ? -1 : 1, px = -uy * sg, py = ux * sg, d = c.dist || 0.5, ah = c.ahead || 0;
+      return { eye: [P.x + px * d + ux * ah, P.y + py * d + uy * ah, R + (c.height || 0.04)], target: [P.x + ux * ah, P.y + uy * ah, R], fov: c.fov || 34 };
+    }
     const A = ptOf(c.along[0]), B = ptOf(c.along[1]), Lk = ptOf(c.look || c.along[0]);
     const l = Math.hypot(B.x - A.x, B.y - A.y) || 1, ux = (B.x - A.x) / l, uy = (B.y - A.y) / l, t = (c.tilt || 30) / DEG;
     const d = c.back !== undefined ? (Math.hypot(Lk.x - A.x, Lk.y - A.y) + c.back) / Math.cos(t) : (c.dist || 0.6);
@@ -1199,17 +1236,54 @@
     }
     return best ? best.v : 2.5;
   }
+  // Re-runs a shot (balls, aim, cue speed, tip) in a copy of the world and measures what the lessons talk about:
+  // where the cue ball's backspin runs out (the reversal point), how long it stays nearly spinless, where it starts
+  // rolling, its first contact, how far it moves after the contact (stop / draw / follow), its path, its end point.
+  function analyzeShot(balls, aim, speed, tipX, tipY, params) {
+    const w = new QB.World(table, Object.assign({}, world.params, params || {})); w.recordTrails = false;
+    for (const b of balls) { const q = w.addBall(b.num, b.x, b.y); if (b.onTable === false) q.onTable = false; }
+    const c = w.balls.find(b => b.num === 0), x0 = c.x, y0 = c.y, ux = Math.cos(aim), uy = Math.sin(aim);
+    w.cueStrike(c, speed, aim, tipX, tipY, 0);
+    const out = { start: { x: x0, y: y0 }, rev: null, stunEnd: null, roll: null, contact: null, cushion: null, cushions: 0, path: [[x0, y0]], objIn: [] };
+    let prev = null, t = 0, r0 = null, lx = x0, ly = y0;
+    while (t < 15) {
+      if (!w.substep(C.DT)) break; t += C.DT;
+      for (const e of w.events) {
+        if (e.type === 'ball' && !out.contact && (w.balls[e.a] === c || w.balls[e.b] === c)) out.contact = { x: c.x, y: c.y };
+        else if (e.type === 'cushion' && e.ball === c.id) { out.cushions++; if (!out.cushion) out.cushion = { x: c.x, y: c.y }; (out.railAt = out.railAt || []).push(out.path.length); out.path.push([c.x, c.y]); }
+        else if (e.type === 'roll' && e.ball === c.id && !out.roll && !out.contact && !out.cushion) out.roll = { x: c.x, y: c.y };
+        else if (e.type === 'pocket' && e.ball !== c.id) out.objIn.push(w.balls[e.ball].num);
+      }
+      w.events = [];
+      const sp = Math.hypot(c.vx, c.vy);
+      if (sp > 1e-3 && !out.contact && !out.cushion) {   // follow / draw spin in units of rolling spin
+        const r = (c.wy * c.vx - c.wx * c.vy) * R / (sp * sp);
+        if (r0 === null) r0 = r;
+        if (r0 < -0.02 && prev !== null && prev < 0 && r >= 0 && !out.rev) out.rev = { x: c.x, y: c.y };   // backspin used up
+        if (r0 > -0.02 && r >= 0.2 && !out.stunEnd) out.stunEnd = { x: c.x, y: c.y };
+        prev = r;
+      }
+      if (Math.hypot(c.x - lx, c.y - ly) > 0.01 && c.onTable) { lx = c.x; ly = c.y; out.path.push([lx, ly]); }
+    }
+    out.end = { x: c.x, y: c.y, on: c.onTable };
+    const along = (p) => p ? (p.x - x0) * ux + (p.y - y0) * uy : null;
+    out.revDist = along(out.rev); out.stunDist = along(out.stunEnd); out.rollDist = along(out.roll);
+    if (out.contact) { out.d = (c.x - out.contact.x) * ux + (c.y - out.contact.y) * uy; out.cls = !c.onTable ? 'scratch' : Math.abs(out.d) <= 0.03 ? 'stop' : out.d < 0 ? 'draw' : 'follow'; }
+    return out;
+  }
+  const lessonTools = { sim: (balls, aim, speed, tipX, tipY, params) => analyzeShot(balls, aim, speed, tipX, tipY, params), R };
   function startScript(L) {
-    S.act = { kind: 'lesson', id: L.id, script: true, scene: 0, beat: 0, done: false, prevView: S.view, layouts: {} };
+    S.act = { kind: 'lesson', id: L.id, script: true, scene: 0, beat: 0, done: false, prevView: S.view, layouts: {}, persist: [], results: {},
+      paramBase: Object.assign({}, world.params) };
     setTip(0, 0); setElev(0);
     enterScene(0);
   }
   function enterScene(i, keepLayout) {
     const a = S.act, sc = lessonById(a.id).scenes[i];
     a.scene = i; a.beat = 0; a.result = null; a.userGB = null; a.showAnswer = false;
-    if (!keepLayout || !a.layouts[i]) a.layouts[i] = sc.layout(table, a.layouts);
+    if (!keepLayout || !a.layouts[i]) a.layouts[i] = sc.layout(table, a.layouts, lessonTools);
     a.g = a.layouts[i];
-    if (!a.g.power) a.g.power = lessonPower(a.g);
+    if (!a.g.power && a.g.pts.GB && a.g.obNum) a.g.power = lessonPower(a.g);
     resetSceneBalls();
     applyBeat();
   }
@@ -1221,9 +1295,19 @@
     clearShotMarks(); a.shotTaken = false;
   }
   function applyBeat() {
-    const a = S.act, b = curBeat();
-    a.result = null; a.showAnswer = false;
-    if (a.shotTaken) resetSceneBalls();
+    const a = S.act, b = curBeat(), sc = curScene();
+    a.result = null; a.showAnswer = false; a.qWrong = []; a.qDone = false;
+    if (S.replaying) { S.replaying = null; S.jumpView = null; }
+    if (a.shotTaken || S.phase === 'moving') resetSceneBalls();
+    // physics for this step (e.g. squirt off), always on top of the settings the lesson started with
+    Object.assign(world.params, a.paramBase, sc.params || {}, b.params || {}); S.cbKey = '';
+    if (b.clearMarks) a.persist = a.persist.filter(m => !b.clearMarks.includes(m.tag));
+    a.zone = typeof b.zone === 'function' ? b.zone(a.g) : (b.zone || null);
+    if (b.tipShow) { setTip(b.tipShow.x, b.tipShow.y); }
+    else if (beatTip(b)) {                    // start in the centre — or, for "below / above this point", on that point
+      const t = beatTip(b), t0 = t.start || (t.below !== undefined ? { x: 0, y: t.below } : t.above !== undefined ? { x: 0, y: t.above } : { x: 0, y: 0 });
+      setTip(t0.x, t0.y);
+    }
     a.task = b.task || null;
     a.aids = Object.assign({ aim: true, ghost: true, obpath: true, tangent: false, cbpath: false, eclipse: false, tipmark: true, overview: true }, b.aids || {});
     a.marks = typeof b.marks === 'function' ? b.marks(a.g) : (b.marks || null);
@@ -1236,6 +1320,7 @@
       a.aim = Math.atan2(t.y - cue.y, t.x - cue.x); S.aim = a.aim; S.aimLocked = true;
     }
     a.placing = b.task === 'place';
+    if (b.task === 'shot' || b.task === 'demo') { S.ballInHand = false; }
     if (a.placing && !a.userGB) {        // the player's ghost ball starts on the cue-ball side of the object ball
       const OB = a.g.pts.OB, CB = a.g.pts.CB, an = Math.atan2(CB.y - OB.y, CB.x - OB.x);
       a.userGB = { x: OB.x + 2 * R * Math.cos(an), y: OB.y + 2 * R * Math.sin(an) };
@@ -1246,7 +1331,7 @@
     if (v !== S.view) setView(v, true);
     if (b.zoom) { const c = centerOf(b.zoom.at); renderer.setZoom({ k: b.zoom.k, cx: c.x + (b.zoom.dx || 0), cy: c.y + (b.zoom.dy || 0) }); } else renderer.setZoom(null);
     if (view3d) { view3d.setScripted(b.cam ? camPose(b.cam) : null); if (b.z !== undefined) view3d.z = b.z; }
-    $('eclipse').classList.toggle('hl', !!(b.aids && b.aids.eclipse && !b.task));   // point at the inset while it is explained
+    drawTipPad();
     showCoach(); updateActivityUI(); defaultStatus();
   }
   function scriptNext() {
@@ -1266,10 +1351,12 @@
   function leaveScript() {
     const a = S.act;
     if (!a || !a.script || a.left) return;
-    a.left = true; a.aids = null; a.marks = null; a.aim = undefined; a.placing = false; a.userGB = null; a.showAnswer = false;
+    a.left = true; a.aids = null; a.marks = null; a.aim = undefined; a.placing = false; a.userGB = null; a.showAnswer = false; a.persist = []; a.zone = null;
+    if (a.paramBase) { Object.assign(world.params, a.paramBase); S.cbKey = ''; }
+    S.replaying = null; S.jumpView = null;
     renderer.setZoom(null, 0.6);
     if (view3d) view3d.setScripted(null);
-    $('coach').hidden = true; $('eclipse').classList.remove('hl');
+    $('coach').hidden = true; updatePointers();
     if (a.prevView && a.prevView !== S.view) setView(a.prevView, true);
   }
   function finishScript() {
@@ -1281,7 +1368,30 @@
   // after a lesson shot: how did it go?
   function scriptAfterShot(rep, scratched) {
     const a = S.act; if (!scriptOn()) return;
+    if (S.replaying) {                       // the slow-motion replay is over: stay where the side camera ended
+      const side = S.replaying.side; S.replaying = null;
+      const bt = curBeat(), r = a.lastR, m = bt.measure, p = m && m.reversal && r ? (r.rev || (m.reversal === 'stun' ? r.stunEnd : null)) : null;
+      if (side && view3d && p) {             // step back from the side so the whole run up to the marked point shows
+        const s0 = r.start, l = Math.hypot(p.x - s0.x, p.y - s0.y) || 1, cx = (s0.x + p.x) / 2, cy = (s0.y + p.y) / 2;
+        let px = -(p.y - s0.y) / l, py = (p.x - s0.x) / l; if (cx * px + cy * py < 0) { px = -px; py = -py; }
+        const d = Math.max(0.8, l * 1.25), ox = (p.x - s0.x) * 0.12, oy = (p.y - s0.y) * 0.12;   // (a little toward the ring: the cue widget covers the right edge)
+        view3d.setScripted({ eye: [cx + ox + px * d, cy + oy + py * d, 0.22 + 0.2 * d], target: [cx + ox, cy + oy, -0.08], fov: 45 }, 1.0);
+      } else if (side && view3d && view3d.lastJumpPose) view3d.setScripted(view3d.lastJumpPose, 0.05);
+      finishResult(); return;
+    }
     a.shotTaken = true;
+    const bt = curBeat();
+    if (bt.measure || bt.question || bt.replay || bt.success || bt.result) {
+      // newer lessons: measure the shot, mark what matters, maybe replay it in slow motion, then explain / ask
+      const L = S.lastShot, sa = analyzeShot(world.balls.map((b, i) => ({ num: b.num, x: S.setup[i].x, y: S.setup[i].y, onTable: S.setup[i].onTable })),
+        L.angle, L.speed, L.tipX, L.tipY);
+      const r = Object.assign(sa, { scratch: scratched, made: !!(rep && rep.pockets.some(p => p.ball !== 0)), end: { x: cue.x, y: cue.y, on: cue.onTable },
+        speed: L.speed, tipX: L.tipX, tipY: L.tipY });
+      if (a.zone) r.inZone = cue.onTable && Math.hypot(cue.x - a.zone.x, cue.y - a.zone.y) <= a.zone.r;
+      a.lastR = r;
+      if (bt.replay) { setTimeout(() => { if (S.act === a && a.lastR === r) startReplay(); }, 1300); a.result = { title: 'Watch it again…', html: '<p>Here comes a slow-motion replay.</p>', buttons: [] }; showCoach(); return; }
+      finishResult(); return;
+    }
     const g = a.g, sc = curScene(), obBall = world.balls.find(b => b.num === g.obNum);
     const r = { made: !!obBall && !obBall.onTable, scratch: scratched,
       cbDist: cue.onTable ? Math.hypot(cue.x - g.pts.GB.x, cue.y - g.pts.GB.y) : null };
@@ -1304,6 +1414,112 @@
     if (view3d && S.lastShot && S.setup) view3d.setScripted(view3d.overviewPose(S.lastShot.angle, S.setup[cue.id], S.ovBack, S.ovHeight), 0.6);
     showCoach(); updateActivityUI(); defaultStatus();
   }
+  // a slow-motion replay of the last shot: from the side (following the cue ball) or from above in 2D
+  function startReplay() {
+    const a = S.act, b = curBeat(), o = b.replay || {};
+    if (!S.lastShot || !S.setup || S.phase === 'moving' || S.phase === 'strike') return;
+    const L = S.lastShot;
+    if (o.view && view3d && o.view !== S.view) setView(o.view, true);
+    if (o.zoom) { const c = centerOf(o.zoom.at); renderer.setZoom({ k: o.zoom.k, cx: c.x + (o.zoom.dx || 0), cy: c.y + (o.zoom.dy || 0) }); }
+    restore(S.setup); S.drops = []; S.flyers = []; clearShotMarks();
+    const rep = S.replaying = { slow: o.slow || 0.35, side: o.side !== false && (o.view || S.view) !== '2d' };
+    S.aim = L.angle; S.tipX = L.tipX; S.tipY = L.tipY; computeEffTip();
+    a.result = { title: 'Slow-motion replay', html: o.text || '<p>Watch the cue ball…</p>', buttons: [] }; showCoach();
+    // first move the camera (side view beside the cue ball, or the 2D zoom), then play the shot once it is there
+    if (view3d) view3d.setScripted(rep.side ? view3d.jumpPose({ x: S.setup[cue.id].x, y: S.setup[cue.id].y, aim: L.angle, follow: true }) : null, 0.9);
+    S.pull = 0;
+    setTimeout(() => { if (S.act === a && S.replaying === rep && S.phase === 'aim') beginStrike(L.speed, true); }, 1300);
+  }
+  // the step's result: a question to answer, or an explanation; a step that has to succeed can be tried again
+  function finishResult() {
+    const a = S.act, b = curBeat(), r = a.lastR; if (!r) return;
+    if (b.measure && !a.marked) addMeasureMarks(b, r);
+    a.marked = false;
+    if (b.result) a.results[b.key || (a.scene + '.' + a.beat)] = r;
+    const L = lessonById(a.id), last = a.scene === L.scenes.length - 1 && a.beat === curScene().beats.length - 1;
+    const again = b.replay ? [{ label: '↻ Watch again', run: startReplay }] : [];
+    const next = { label: last ? 'Finish ▶' : 'Next ▶', primary: true, run: scriptNext };
+    if (b.question && !a.qDone) {
+      const q = b.question, right = q.answer(r);
+      const opts = q.options.map(op => ({ label: op.label, answer: true, cls: a.qWrong.includes(op.id) ? 'wrong' : '', run: () => {
+        if (op.id === right) { a.qDone = true; finishResult(); } else { if (!a.qWrong.includes(op.id)) a.qWrong.push(op.id); finishResult(); }
+      } }));
+      a.result = { title: q.title || 'What happened?', html: (q.html ? (typeof q.html === 'function' ? q.html(r) : q.html) : '') + (a.qWrong.length ? '<p class="wrongmsg">Not quite — watch the cue ball again and try another answer.</p>' : ''), buttons: again.concat(opts), question: true };
+      showCoach(); updateActivityUI(); return;
+    }
+    const ok = b.success ? b.success(r, a) : true;
+    const res = Object.assign({ title: ok ? 'Good' : 'Not yet', html: '' }, b.result ? b.result(r, a.results, ok) : {});
+    res.buttons = ok ? again.concat([next]) : again.concat([{ label: 'Try again', primary: true, run: () => applyBeat() }]);
+    a.result = res;
+    if (view3d && !S.replaying && b.replay === undefined && S.lastShot && S.setup && aid('overview')) view3d.setScripted(view3d.overviewPose(S.lastShot.angle, S.setup[cue.id], S.ovBack, S.ovHeight), 0.6);
+    showCoach(); updateActivityUI(); defaultStatus();
+  }
+  // marks that stay on the table for the rest of the lesson (to compare steps): reversal points and cue-ball paths
+  function addMeasureMarks(b, r) {
+    const a = S.act, m = b.measure, tag = m.tag || (a.scene + '.' + a.beat);
+    a.persist = a.persist.filter(q => q.tag !== tag);
+    if (m.reversal) {
+      const p = r.rev || (m.reversal === 'stun' ? r.stunEnd : null);
+      if (p) a.persist.push({ tag, type: 'ring', at: { x: p.x, y: p.y }, color: m.color || '#ffffff', label: m.label });
+    }
+    if (m.path) {
+      let pts = r.path;
+      if (m.path === 'one-rail' && r.railAt && r.railAt.length > 1) pts = pts.slice(0, r.railAt[1] + 1);   // up to the second rail
+      let labelAt = null;                    // the label goes 45 cm (dashed: 80 cm) past the first cushion, or at the end
+      if (r.railAt && r.railAt.length) { let acc = 0; for (let i = r.railAt[0] + 1; i < pts.length; i++) { acc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); if (acc >= (m.dash ? 0.8 : 0.45)) { labelAt = { x: pts[i][0], y: pts[i][1] }; break; } } }
+      a.persist.push({ tag, type: 'path', pts: pts.map(q => ({ x: q[0], y: q[1] })), color: m.color || '#ffffff', dash: m.dash, label: m.label, labelAt });
+    }
+  }
+  // a demonstration: the lesson plays the shot itself
+  function runDemo() {
+    const b = curBeat(), d = b.demo; if (!d || S.phase !== 'aim') return;
+    S.tipX = d.tipX || 0; S.tipY = d.tipY || 0; computeEffTip(); drawTipPad();
+    S.pull = 0; beginStrike(typeof d.power === 'function' ? d.power(S.act.g) : d.power, true);
+    S.act.result = { title: 'Watch…', html: '', buttons: [] }; showCoach();
+  }
+  function tipOK(b) {
+    const t = b && beatTip(b); if (!t) return true;
+    const x = S.tipX, y = S.tipY, tol = t.tol || 0.07;
+    if (Math.hypot(x, y) > QB.miscueLimit(world.params) + 1e-6) return false;
+    if (t.below !== undefined) return Math.abs(x) < 0.03 && y <= t.below - (t.gap || 0.06);
+    if (t.above !== undefined) return Math.abs(x) < 0.03 && y >= t.above + (t.gap || 0.06) && (t.max === undefined || y <= t.max);
+    if (t.target) return Math.hypot(x - t.target.x, y - t.target.y) <= tol;
+    return true;
+  }
+  // the cue-ball picture in a lesson step: a clock face, the line the tip may move on, and where to hit
+  function scriptPadOverlay(ctx, c, r, dpr) {
+    if (!scriptOn()) return;
+    const b = curBeat(), t = beatTip(b);
+    ctx.save();
+    if (b.padClock || (t && t.clock)) {
+      ctx.fillStyle = 'rgba(20,24,28,0.75)'; ctx.font = `600 ${Math.round(r * 0.17)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (let h = 1; h <= 12; h++) {
+        const an = h / 12 * Math.PI * 2, sx = Math.sin(an), cy = -Math.cos(an);
+        ctx.strokeStyle = 'rgba(20,24,28,0.35)'; ctx.lineWidth = (h % 3 ? 1 : 2) * dpr;
+        ctx.beginPath(); ctx.moveTo(c + sx * r * 0.9, c + cy * r * 0.9); ctx.lineTo(c + sx * r * 0.99, c + cy * r * 0.99); ctx.stroke();
+        if (h % 3 === 0) ctx.fillText(String(h), c + sx * r * 0.76, c + cy * r * 0.76);
+      }
+    }
+    if (t) {
+      ctx.strokeStyle = 'rgba(59,111,216,0.45)'; ctx.lineWidth = 3 * dpr; ctx.lineCap = 'round';
+      const L = r * QB.miscueLimit(world.params);
+      if (t.axis === 'y') { ctx.beginPath(); ctx.moveTo(c, c - L); ctx.lineTo(c, c + L); ctx.stroke(); }
+      if (t.axis === 'x') { ctx.beginPath(); ctx.moveTo(c - L, c); ctx.lineTo(c + L, c); ctx.stroke(); }
+      const col = t.color || '#4fb3ff';
+      if (t.target) {
+        ctx.strokeStyle = col; ctx.lineWidth = 2.5 * dpr; ctx.setLineDash([4 * dpr, 3 * dpr]);
+        ctx.beginPath(); ctx.arc(c + t.target.x * r, c - t.target.y * r, r * Math.max(0.11, t.tol || 0.07), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        if (t.dot !== false) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(c + t.target.x * r, c - t.target.y * r, r * 0.075, 0, Math.PI * 2); ctx.fill(); }   // the point to hit
+      }
+      for (const k of ['below', 'above']) if (t[k] !== undefined) {         // the nominal point, and the side to go to
+        const yy = c - t[k] * r, gap = (t.gap || 0.06) * r, dir = k === 'below' ? 1 : -1, end = k === 'below' ? c + L : c - (t.max !== undefined ? t.max : QB.miscueLimit(world.params)) * r;
+        ctx.strokeStyle = 'rgba(63,191,111,0.75)'; ctx.lineWidth = 6 * dpr;
+        ctx.beginPath(); ctx.moveTo(c, yy + dir * gap); ctx.lineTo(c, end); ctx.stroke();
+        ctx.strokeStyle = '#111111'; ctx.lineWidth = 2.5 * dpr; ctx.beginPath(); ctx.arc(c, yy, r * 0.17, 0, Math.PI * 2); ctx.stroke();   // the reference point: a black ring (around the tip mark)
+      }
+    }
+    ctx.restore();
+  }
   // shots: only when the beat asks for one, and always at the lesson's strength
   function shotLocked() { return scriptOn() && (S.act.task !== 'shot' || !!S.act.result); }
   // the player's ghost ball: it always touches the object ball, so dragging moves it around the object ball
@@ -1314,7 +1530,14 @@
   // marks of the current beat (names resolved to points), plus the player's ghost ball and the answer
   function scriptMarks() {
     if (!scriptOn()) return null;
-    const a = S.act, m = a.marks || {}, out = { lines: [], dot: null, labels: [], balls: [] };
+    const a = S.act, m = a.marks || {}, out = { lines: [], dot: null, labels: [], balls: [], rings: [] };
+    for (const q of a.persist || []) {           // marks kept from earlier steps (reversal points, paths)
+      if (q.type === 'ring') { out.rings.push({ x: q.at.x, y: q.at.y, color: q.color }); if (q.label) out.labels.push({ at: { x: q.at.x, y: q.at.y + 0.075 }, text: q.label, color: q.color }); }
+      else if (q.type === 'path') {
+        out.lines.push({ pts: q.pts, color: q.color, dash: q.dash, width: 0.003 });
+        const e = q.labelAt || q.pts[q.pts.length - 1]; if (q.label && e) out.labels.push({ at: { x: e.x, y: e.y + ((e.y > 0) !== !!q.dash ? 0.04 : -0.04) }, text: q.label, color: q.color });
+      }
+    }
     for (const l of m.lines || []) { const pts = l.pts.map(ptOf).filter(Boolean); if (pts.length > 1) out.lines.push({ pts, color: l.color, width: l.width }); }
     if (m.dot) out.dot = ptOf(m.dot);
     for (const t of m.labels || []) { const p = ptOf(t.at); if (p) out.labels.push({ at: { x: p.x + (t.dx || 0), y: p.y + (t.dy || 0) }, text: t.text, color: t.color }); }
@@ -1325,10 +1548,14 @@
     }
     return out;
   }
-  function lessonMarks() { const m = scriptMarks(); return m && (m.lines.length || m.dot || m.balls.length) ? m : null; }
+  function lessonMarks() { const m = scriptMarks(); return m && (m.lines.length || m.dot || m.balls.length || m.rings.length) ? m : null; }
   function drawScriptMarks2D(layer) {
     const m = scriptMarks(); if (!m) return;
-    if (layer === 'under') { for (const l of m.lines) renderer.drawGuide(l.pts, { color: l.color, width: l.width || 0.004 }); return; }
+    if (layer === 'under') {
+      for (const l of m.lines) renderer.drawGuide(l.pts, { color: l.color, width: l.width || 0.004, dash: l.dash ? [0.012, 0.009] : null });
+      for (const q of m.rings) renderer.drawRing(q, q.color);
+      return;
+    }
     for (const q of m.balls) renderer.drawGhostBall(q, q.answer ? { fill: 'rgba(63,191,111,0.35)', stroke: '#3fbf6f' } : {});
     if (m.dot) renderer.drawDot(m.dot, 0.0035, '#ff3b3b');
     for (const t of m.labels) renderer.drawLabel(t.at, t.text, t.color || '#ffffff');
@@ -1349,10 +1576,37 @@
     const add = (label, run, cls) => { const el = document.createElement('button'); el.textContent = label; if (cls) el.className = cls; el.onclick = run; box.appendChild(el); return el; };
     const back = add('◀ Back', scriptBack); back.disabled = !res && a.scene === 0 && a.beat === 0;
     const sp = document.createElement('span'); sp.className = 'sp'; box.appendChild(sp);
-    if (res) for (const bt of res.buttons) add(bt.label, bt.run, bt.primary ? 'primary' : '');
+    if (res && res.question) {                 // a question: the answers in a row of their own, Back left and Watch again right below
+      const ans = document.createElement('div'); ans.className = 'ch-answers';
+      for (const bt of res.buttons.filter(q => q.answer)) { const el = document.createElement('button'); el.textContent = bt.label; el.className = 'answer ' + (bt.cls || ''); el.onclick = bt.run; ans.appendChild(el); }
+      box.appendChild(ans);
+      for (const bt of res.buttons.filter(q => !q.answer)) add(bt.label, bt.run, bt.primary ? 'primary' : (bt.cls || ''));
+    } else if (res) for (const bt of res.buttons) add(bt.label, bt.run, bt.primary ? 'primary' : (bt.cls || ''));
     else if (a.task === 'place') add('Confirm ✓', scriptNext, 'primary');
-    else if (a.task === 'shot') { const h = document.createElement('span'); h.className = 'wait'; h.textContent = 'take the shot…'; box.appendChild(h); add('Skip ▶', scriptNextScene); }
+    else if (a.task === 'shot') { const h = document.createElement('span'); h.className = 'wait'; h.textContent = 'take the shot…'; box.appendChild(h); if (!L.noSkip) add('Skip ▶', scriptNextScene); }
+    else if (a.task === 'demo') add('▶ Watch the shot', runDemo, 'primary');
     else add(a.beat === sc.beats.length - 1 && a.scene === L.scenes.length - 1 ? 'Finish ▶' : 'Next ▶', scriptNext, 'primary');
+    updatePointers();
+  }
+  // things in the panel the lesson card talks about pulse: the beat's `point` list, the eclipse inset while it is
+  // explained, and in a shot the cue-ball picture until the tip is where the step wants it (then the cue to pull)
+  let pointed = [];
+  // the "put the tip here first" flash ends by itself, so the pulse (if any) comes back
+  $('tipPad').addEventListener('animationend', (e) => { if (e.animationName === 'tipWant') $('tipPad').classList.remove('want'); });
+  function updatePointers() {
+    const want = new Set(), a = S.act;
+    if (scriptOn() && !a.left && !a.result) {
+      const b = curBeat(), t = beatTip(b);
+      const tipPending = a.task === 'shot' && !!t && (!!t.target || t.below !== undefined || t.above !== undefined) && !tipOK(b);
+      if (tipPending) want.add('tipPad');
+      // the player chooses the hitting point (only a line to stay on): the cue-ball picture pulses with the cue
+      else if (a.task === 'shot' && t && t.axis !== 'fixed' && !t.target && t.below === undefined && t.above === undefined) want.add('tipPad');
+      for (const id of b.point || []) if (!(tipPending && id.startsWith('powerCue'))) want.add(id);
+      if (b.aids && b.aids.eclipse && !b.task) want.add('eclipse');
+    }
+    for (const id of pointed) if (!want.has(id) && $(id)) $(id).classList.remove('pointme');
+    for (const id of want) if ($(id)) $(id).classList.add('pointme');
+    pointed = [...want];
   }
 
   // ---------------- Free ball placement ----------------
@@ -1971,17 +2225,18 @@
       // jump shots: slow motion while a ball is in the air; the side view stays for a moment after the landing
       const flying = world.balls.some(b => b.onTable && b.airborne()) || S.flyers.some(f => !f.floor && !f.done);
       if (S.jumpView) {
-        S.jumpView.t = flying ? 0 : S.jumpView.t + dt; if (S.jumpView.t > 0.8) S.jumpView = null;
+        S.jumpView.t = flying || S.jumpView.keep ? 0 : S.jumpView.t + dt; if (S.jumpView.t > 0.8) S.jumpView = null;
+        else if (S.jumpView.follow) S.jumpView.track = { x: cue.x, y: cue.y, z: cue.z };   // (lesson replays: follow the cue ball)
         else {                                  // the side camera follows the ball that is up in the air (cue ball first)
           const fl = S.flyers.find(f => !f.done && !f.floor), up = world.balls.filter(b => b.onTable && b.airborne()).sort((p, q) => p.num - q.num)[0];
           const T = up || fl; if (T) S.jumpView.track = { x: T.x, y: T.y, z: T.z };
         }
       }
-      S.acc += dt * S.timeScale * (S.jumpView && flying ? 0.3 : 1);
+      S.acc += dt * S.timeScale * (S.replaying ? S.replaying.slow : S.jumpView && flying ? 0.3 : 1);
       let n = 0;
       while (S.acc >= C.DT && n < 4000) { world.substep(C.DT); S.acc -= C.DT; n++; }
       processEvents();
-      if (S.flyers.length) stepFlyers(dt * S.timeScale * (S.jumpView && flying ? 0.3 : 1));
+      if (S.flyers.length) stepFlyers(dt * S.timeScale * (S.replaying ? S.replaying.slow : S.jumpView && flying ? 0.3 : 1));
       if (!world.isMoving() && !flyersBusy()) endShot();       // (a ball flying off the table: wait until it is down)
       else syncInputs();
     } else if (S.flyers.length) stepFlyers(dt * S.timeScale);
@@ -2001,6 +2256,7 @@
     if (S.chalk.length) renderer.drawChalk(S.chalk);
     // drill target: pocket and cue-ball zone
     if (S.act.kind === 'drill') { renderer.drawPocketMark(S.act.pocket); if (S.act.zone) renderer.drawZone(S.act.zone); }
+    else if (scriptOn() && S.act.zone) renderer.drawZone(S.act.zone);
     if (test && S.prediction) renderer.drawTrails(S.prediction, { dash: [0.012, 0.01], alpha: 0.7, width: 0.0025 });
     if ($('optTrails').checked) {
       renderer.drawTrails(world.balls);
@@ -2035,7 +2291,8 @@
     }
     drawScriptMarks2D('over');
     const arranging = placeMode() && S.arrange;
-    const showCue = cue.onTable && (S.phase === 'aim' || S.phase === 'pull' || S.phase === 'strike') && !(test && S.moveMode) && !arranging;
+    const showCue = cue.onTable && (S.phase === 'aim' || S.phase === 'pull' || S.phase === 'strike') && !(test && S.moveMode) && !arranging
+      && !(scriptOn() && S.act.result && S.act.shotTaken && !S.replaying);       // (lesson: no cue lying over the marks while the result is shown)
     let pb = S.pull;
     if (S.phase === 'strike') pb = S.strikeFrom * Math.max(0, 1 - S.strikeT / 0.07);
     updateMap();
@@ -2048,7 +2305,7 @@
       aim: S.lastShot.angle, elev: (S.lastShot.elev || 0) / DEG, tipX: S.lastShot.tipX, tipY: S.lastShot.tipY, pull: 0 } : null;
     if (cueViewOn() || eclOn) view3d.render({ shotCue: sc, ovBack: S.ovBack, ovHeight: S.ovHeight, drops: S.flyers.length ? S.drops.concat(S.flyers) : S.drops, drawMain: cueViewOn(), overview: S.phase === 'moving' && aid('overview') && !S.jumpView, jumpView: S.phase === 'moving' ? S.jumpView : null, eclipse: eclOn ? eclEls : null, balls: world.balls, cue, aimAngle: S.aim, elev: S.elev / DEG, tipX: eff().x, tipY: eff().y,
       pull: pb, showCue, showAids: !!aim && aidsOn && !arranging, showGhost: !!aim && ghostOn && !arranging, showTipMark: aid('tipmark') && !arranging, showBounce: aid('cbpath'), aim, cbPath: arranging ? null : S.cbPath, showTangent: aid('tangent'), showObPath: aid('obpath'), lesson: lessonMarks(),
-      zone: S.act.kind === 'drill' ? S.act.zone : null, chalk: S.chalk });
+      zone: S.act.kind === 'drill' ? S.act.zone : scriptOn() ? S.act.zone : null, chalk: S.chalk });
     if (showCue) {
       if (view3d && view3d.walk) {           // walking: the cue is carried by the player (on the map: at the blue dot)
         const w = view3d.walk, dx = Math.cos(w.yaw), dy = Math.sin(w.yaw);
@@ -2294,6 +2551,14 @@
       g.addColorStop(0, '#5fd35f'); g.addColorStop(0.6, '#f2c200'); g.addColorStop(1, '#e53935');
       ctx.fillStyle = g; roundRectPath(ctx, W * 0.12, top, W * 0.14, Math.max(W * 0.14, travel * frac + H * 0.04), W * 0.07); ctx.fill();
     }
+    // lessons: the strength to use, as a blue band on the track (brighter while the pull is inside it)
+    const rg = scriptOn() && !S.act.result && S.act.task === 'shot' ? powerRange() : null;
+    if (rg) {
+      const y0 = top + H * 0.04 + travel * rg[0] / maxSpeed(), y1 = top + H * 0.04 + travel * rg[1] / maxSpeed();
+      const sp = speedFromPull(pb), inside = pb > 0.004 && sp >= rg[0] && sp <= rg[1];
+      ctx.fillStyle = inside ? 'rgba(79,179,255,0.95)' : 'rgba(79,179,255,0.55)'; ctx.fillRect(W * 0.04, y0, W * 0.30, Math.max(3 * dpr, y1 - y0));
+      ctx.strokeStyle = '#4fb3ff'; ctx.lineWidth = 1.5 * dpr; ctx.strokeRect(W * 0.04, y0, W * 0.30, Math.max(3 * dpr, y1 - y0));
+    }
     // cue ball at the top, cue below it, pulled back by the current pull
     const br = W * 0.16;
     ctx.fillStyle = '#f2f0e8'; ctx.beginPath(); ctx.arc(cx, top + br, br, 0, Math.PI * 2); ctx.fill();
@@ -2322,5 +2587,5 @@
   requestAnimationFrame(frame);
 
   // expose for console debugging / automated tests
-  window.qb = { railDist: (x, y, a) => noseDist(x, y, -Math.cos(a), -Math.sin(a)), eff: () => computeEffTip(), world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot, startLesson, selectCue, defaultStatus, lessonNext: () => scriptNext(), lessonBack: () => scriptBack(), moveUserGB: (x, y) => moveUserGB({ x, y }) };
+  window.qb = { railDist: (x, y, a) => noseDist(x, y, -Math.cos(a), -Math.sin(a)), eff: () => computeEffTip(), world, table, renderer, S, get cue() { return cue; }, get ob() { return ob; }, setMode, startGame, startDrill, showMenu, replay, setCut, restartActivity, shootFromPanel, setTip, setElev, view3d, swapViews, setView, shotJSON, loadShot, startLesson, selectCue, defaultStatus, lessonNext: () => scriptNext(), strike: (v) => beginStrike(v), sim: analyzeShot, lessonBack: () => scriptBack(), moveUserGB: (x, y) => moveUserGB({ x, y }) };
 })();

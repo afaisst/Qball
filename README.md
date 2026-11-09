@@ -36,10 +36,18 @@ The **Lessons** tab teaches one idea at a time. The balls are set up for you, on
 </tr><tr>
 <td><sub>Lesson 1: where the ghost ball is.</sub></td>
 <td><sub>Lesson 1: a 30° cut seen along the cue line. You aim at the edge of the 9 — a half-ball hit.</sub></td>
+</tr><tr>
+<td width="50%"><img src="assets/screenshots/lesson-draw.jpg" alt="Lesson 2: the table from the side with three rings and arrows marking where the backspin ran out for a soft, a medium and a firm draw shot"></td>
+<td width="50%"><img src="assets/screenshots/lesson-side.jpg" alt="Lesson 3: the cue ball's paths off the head rail with a little and a lot of right spin, without squirt (white) and with squirt (green, dashed)"></td>
+</tr><tr>
+<td><sub>Lesson 2: where the backspin runs out — soft, medium and firm.</sub></td>
+<td><sub>Lesson 3: right spin off the cushion, without and with squirt.</sub></td>
 </tr></table>
 
 - **Lesson 1 · Aiming with the ghost ball.** Where do you aim? At the *ghost ball*: the spot the cue ball has to take, touching the object ball on the line to the pocket. You see it from above, from behind the pocket and from the cue ball, in a straight shot and in 10°, 30° and 50° cuts. The aiming point moves from the centre of the object ball to its edge (30°, the half-ball hit) and into the air beside it (50°), and the **eclipse view** shows the easier way to aim: how much of the object ball the cue ball covers. Then you place the ghost ball yourself, aim and shoot, and Qball shows how far off you were.
-- **Lesson 2 · The stop shot.** Stop the cue ball dead where it hits the object ball. You try soft, medium and hard shots in the centre and a little below it, and see why a sliding cue ball stops and a rolling one follows.
+- **Lesson 2 · Follow and draw.** Where to hit the cue ball for **follow** and **draw**, named by the clock on the cue-ball picture. The aim is set; you choose the hitting point and pull the cue into a blue band that shows the right strength. Each draw shot is replayed in slow motion from the side, and a ring marks where the backspin runs out — the spot where a stop shot would happen. Softer, firmer and nearer the centre move that spot; a firm centre-ball hit makes the ball slide without spin.
+- **Lesson 3 · Side spin.** **Side spin** at 3 and 9 o'clock: it does nothing on the cloth and changes the angle off the cushion. Shots straight into the rail with a little and a lot of spin, to the right and to the left, replayed from above with their paths drawn. Then **squirt** is switched on, and you see the cue ball leave the aiming line — more the farther off-centre you hit.
+- **Lesson 4 · The stop shot.** The straight **stop shot**. Hit the stop-shot point and the cue ball stops dead; then hit lower and higher, softer and firmer, watch the slow-motion replay and say what happened (stop, draw or follow). Finally, with the cue ball 5 cm farther back, you choose the hitting point and the strength yourself and have to stop it in a small circle — and see that a firm centre-ball hit works too at short range.
 
 More lessons are on the way.
 
@@ -141,6 +149,7 @@ No git? Click **Code → Download ZIP** on the GitHub page, unzip it, and open `
 
 ## Version history
 
+- **1.8 · 8 Nov 2026** — **Three new lessons:** follow and draw, side spin, and the stop shot — with a clock on the cue-ball picture, a blue band on the cue for the strength to use, slow-motion replays from the side or from above, rings and paths that stay on the table to compare shots, questions to answer, and a shot you have to make to go on. They replace the old stop-shot lesson.
 - **1.7 · 6 Nov 2026** — **Jump shots:** the ball leaves the cloth when the cue is raised and hit firmly, flies, bounces when it lands, can hit balls on the way down and can jump off the table. A short, light **jump cue**, and a slow-motion side view of every jump in 3D. A ball that flies off the table is a foul (ball in hand); it falls to the floor, bounces off the walls — denting the panelling or cracking a painting's glass — and rolls away. Touch-friendly hints in touch mode. An illustrated guide, now the landing page (`index.html`); the game itself moved to `play.html`.
 - **1.6 · 6 Nov 2026** — **Full walk mode:** walk with the arrow keys, look around (and up and down) by dragging the 3D view; clicking the map just stands you up where you are. New README and screenshots.
 - **1.5 · 6 Nov 2026** — **Realistic breaks:** touching balls now collide all at once, with an elastic contact model, so the break spreads through the rack instead of sending one ball out of the back. **Break cue** and a cue rack.
